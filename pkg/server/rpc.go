@@ -2,47 +2,35 @@ package server
 
 import (
 	"context"
-	"fmt"
 
 	"github.com/contrun/go-p2p-pipes/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
+	"google.golang.org/grpc/status"
 )
 
 const UNIMPLEMENTED_ERROR_MESSAGE string = "unimplemented"
 
-var UNIMPLEMENTED_ERROR error = fmt.Errorf("unimplemented")
+var UNIMPLEMENTED_ERROR error = status.Error(codes.Unimplemented, UNIMPLEMENTED_ERROR_MESSAGE)
 
 func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscoveringPeersRequest) (*pb.StartDiscoveringPeersResponse, error) {
-	var response pb.StartDiscoveringPeersResponse
-	response.Result = pb.ResponseType(pb.ResponseType_ERROR.Number())
-	response.Message = UNIMPLEMENTED_ERROR_MESSAGE
-	return &response, UNIMPLEMENTED_ERROR
+	return nil, UNIMPLEMENTED_ERROR
 }
 
 func (s *Server) StopDiscoveringPeers(ctx context.Context, in *pb.StopDiscoveringPeersRequest) (*pb.StopDiscoveringPeersResponse, error) {
-	var response pb.StopDiscoveringPeersResponse
-	response.Result = pb.ResponseType(pb.ResponseType_ERROR.Number())
-	response.Message = UNIMPLEMENTED_ERROR_MESSAGE
-	return &response, UNIMPLEMENTED_ERROR
+	return nil, UNIMPLEMENTED_ERROR
 }
 
 func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.ListPeersResponse, error) {
-	var response pb.ListPeersResponse
-	response.Result = pb.ResponseType(pb.ResponseType_ERROR.Number())
-	response.Message = UNIMPLEMENTED_ERROR_MESSAGE
-	return &response, UNIMPLEMENTED_ERROR
+	return nil, UNIMPLEMENTED_ERROR
 }
 
 func (s *Server) ForwardIO(ctx context.Context, in *pb.ForwardIORequest) (*pb.ForwardIOResponse, error) {
-	var response pb.ForwardIOResponse
-	response.Result = pb.ResponseType(pb.ResponseType_ERROR.Number())
-	response.Message = UNIMPLEMENTED_ERROR_MESSAGE
-	return &response, UNIMPLEMENTED_ERROR
+	return nil, UNIMPLEMENTED_ERROR
 }
 
 func (server *Server) listen() {
-
 	s := grpc.NewServer()
 	pb.RegisterP2PPipeServer(s, server)
 	reflection.Register(s)

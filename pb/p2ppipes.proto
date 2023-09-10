@@ -11,11 +11,6 @@ service P2PPipe {
   rpc ForwardIO (ForwardIORequest) returns (ForwardIOResponse) {}
 }
 
-enum ResponseType {
-  OK    = 0;
-  ERROR = 1;
-}
-
 enum PeerDiscoveryMethod {
   UNDEFINED    = 0;
   DHT = 1;
@@ -36,19 +31,13 @@ message StartDiscoveringPeersRequest {
   }
 }
 
-message StartDiscoveringPeersResponse {
-  ResponseType result = 1;
-  string message = 2;
-}
+message StartDiscoveringPeersResponse {}
 
 message StopDiscoveringPeersRequest {
   PeerDiscoveryMethod method = 1;
 }
 
-message StopDiscoveringPeersResponse {
-  ResponseType result = 1;
-  string message = 2;
-}
+message StopDiscoveringPeersResponse {}
 
 enum PeerType {
   PEERTYPEUNDEFIEND    = 0;
@@ -67,9 +56,7 @@ message ListPeersRequest {
 }
 
 message ListPeersResponse {
-  ResponseType result = 1;
-  string message = 2;
-  repeated Peer peers = 3;
+  repeated Peer peers = 1;
 }
 
 enum IOType {
@@ -96,8 +83,4 @@ message ForwardIORequest {
   optional IO writer = 5;
 }
 
-message ForwardIOResponse {
-  ResponseType result = 1;
-  string message = 2;
-}
-
+message ForwardIOResponse {}
