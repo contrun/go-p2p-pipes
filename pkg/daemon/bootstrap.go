@@ -32,7 +32,7 @@ func (d *Daemon) Bootstrap(peers []multiaddr.Multiaddr) error {
 	}
 
 	for _, pi := range pis {
-		d.host.Peerstore().AddAddrs(pi.ID, pi.Addrs, peerstore.PermanentAddrTTL)
+		d.Host.Peerstore().AddAddrs(pi.ID, pi.Addrs, peerstore.PermanentAddrTTL)
 	}
 
 	count := d.connectBootstrapPeers(pis, BootstrapConnections)
@@ -58,14 +58,14 @@ func (d *Daemon) connectBootstrapPeers(pis []peer.AddrInfo, toconnect int) int {
 	defer cancel()
 
 	for _, pi := range pis {
-		if d.host.Network().Connectedness(pi.ID) == network.Connected {
+		if d.Host.Network().Connectedness(pi.ID) == network.Connected {
 			continue
 		}
-		err := d.host.Connect(ctx, pi)
+		err := d.Host.Connect(ctx, pi)
 		if err != nil {
 			log.Debugw("Error connecting to bootstrap peer", "peer", pi.ID, "error", err)
 		} else {
-			d.host.ConnManager().TagPeer(pi.ID, "bootstrap", 1)
+			d.Host.ConnManager().TagPeer(pi.ID, "bootstrap", 1)
 			count++
 			toconnect--
 		}
@@ -83,7 +83,7 @@ func (d *Daemon) keepBootstrapConnections(pis []peer.AddrInfo) {
 	for {
 		<-ticker.C
 
-		conns := d.host.Network().Conns()
+		conns := d.Host.Network().Conns()
 		if len(conns) >= BootstrapConnections {
 			continue
 		}

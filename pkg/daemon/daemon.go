@@ -10,7 +10,6 @@ import (
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p/core/host"
-	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
@@ -38,8 +37,8 @@ import (
 var log = logging.Logger("daemon")
 
 type Daemon struct {
+	host.Host
 	ctx      context.Context
-	host     host.Host
 	listener manet.Listener
 
 	dht    *dht.IpfsDHT
@@ -66,7 +65,7 @@ func (d *Daemon) DHTRoutingFactory(opts []dhtopts.Option) func(host.Host) (routi
 }
 
 func (d *Daemon) EnableRelayV2() error {
-	_, err := relay.New(d.host)
+	_, err := relay.New(d.Host)
 	return err
 }
 
@@ -83,7 +82,7 @@ func (d *Daemon) EnablePubsub(router string, sign, strict bool) error {
 
 	switch router {
 	case "floodsub":
-		pubsub, err := ps.NewFloodSub(d.ctx, d.host, opts...)
+		pubsub, err := ps.NewFloodSub(d.ctx, d.Host, opts...)
 		if err != nil {
 			return err
 		}
@@ -91,7 +90,7 @@ func (d *Daemon) EnablePubsub(router string, sign, strict bool) error {
 		return nil
 
 	case "gossipsub":
-		pubsub, err := ps.NewGossipSub(d.ctx, d.host, opts...)
+		pubsub, err := ps.NewGossipSub(d.ctx, d.Host, opts...)
 		if err != nil {
 			return err
 		}
@@ -102,10 +101,6 @@ func (d *Daemon) EnablePubsub(router string, sign, strict bool) error {
 		return fmt.Errorf("unknown pubsub router: %s", router)
 	}
 
-}
-
-func (d *Daemon) ID() peer.ID {
-	return d.host.ID()
 }
 
 func (d *Daemon) listen() {
@@ -162,30 +157,30 @@ func (d *Daemon) handleSIGUSR1() {
 		d.dht.RoutingTable().Print()
 	}
 
-	conns := d.host.Network().Conns()
+	conns := d.Host.Network().Conns()
 	log.Infof("Connections and streams (%d):\n", len(conns))
 
 	for _, c := range conns {
-		protos, _ := d.host.Peerstore().GetProtocols(c.RemotePeer()) // error value here is useless
+		protos, _ := d.Host.Peerstore().GetProtocols(c.RemotePeer()) // error value here is useless
 
-		protoVersion, err := d.host.Peerstore().Get(c.RemotePeer(), "ProtocolVersion")
+		protoVersion, err := d.Host.Peerstore().Get(c.RemotePeer(), "ProtocolVersion")
 		if err != nil {
 			protoVersion = "(unknown)"
 		}
 
-		agent, err := d.host.Peerstore().Get(c.RemotePeer(), "AgentVersion")
+		agent, err := d.Host.Peerstore().Get(c.RemotePeer(), "AgentVersion")
 		if err != nil {
 			agent = "(unknown)"
 		}
 
 		streams := c.GetStreams()
-		log.Infof("Dumpping stream info", "peer", c.RemotePeer().Pretty(), "multiaddr", c.RemoteMultiaddr(),
+		log.Infow("Dumpping stream info", "peer", c.RemotePeer().Pretty(), "multiaddr", c.RemoteMultiaddr(),
 			"protoVersion", protoVersion, "agent", agent,
 			"protocols", protos,
 			"streams", len(streams),
 		)
 		for i, s := range streams {
-			log.Infof("Dummping stream protocols", "stream index", i, "protocols", s.Protocol())
+			log.Infow("Dumpping stream protocol", "stream index", i, "protocol", s.Protocol())
 		}
 	}
 }
@@ -196,7 +191,7 @@ func (d *Daemon) Close() error {
 	d.mx.Unlock()
 
 	var merr *multierror.Error
-	if err := d.host.Close(); err != nil {
+	if err := d.Host.Close(); err != nil {
 		merr = multierror.Append(err)
 	}
 
@@ -246,7 +241,7 @@ func NewDaemon(ctx context.Context, maddr ma.Multiaddr, dhtMode string, opts ...
 	if err != nil {
 		return nil, err
 	}
-	d.host = h
+	d.Host = h
 
 	l, err := manet.Listen(maddr)
 	if err != nil {
@@ -380,7 +375,7 @@ func NewDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 		}
 	}
 
-	log.Infow("Starting daemon", "Control socket", c.ListenAddr.String(), "Peer ID", d.ID().Pretty(), "Addrs", d.host.Addrs())
+	log.Infow("Starting daemon", "Control socket", c.ListenAddr.String(), "Peer ID", d.ID().Pretty(), "Addrs", d.Host.Addrs())
 	if c.Bootstrap.Enabled && len(c.Bootstrap.Peers) > 0 {
 		log.Infow("Bootstrapping peers", "peers", c.Bootstrap.Peers)
 		d.Bootstrap(c.Bootstrap.Peers)
