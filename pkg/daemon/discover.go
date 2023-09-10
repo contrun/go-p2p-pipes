@@ -1,7 +1,10 @@
 package daemon
 
 import (
+	"context"
+
 	"github.com/ipfs/go-cid"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"
 )
 
@@ -19,6 +22,11 @@ func (d *Daemon) getRendezvousCid(where string) cid.Cid {
 	return id
 }
 
-func (d *Daemon) RendezvousAt(point string) error {
-	return nil
+func (d *Daemon) FindDHTPeersAsync(ctx context.Context, rdv string, count int) (<-chan peer.AddrInfo, error) {
+	dht := d.DHT()
+	if dht == nil {
+		return nil, ERROR_NO_DHT
+	}
+	log.Infow("Find via dht", "dht", d.DHT())
+	return d.DHT().FindProvidersAsync(ctx, d.getRendezvousCid(rdv), defaultProviderCount), nil
 }
