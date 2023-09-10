@@ -10,6 +10,7 @@ require (
 	github.com/libp2p/go-libp2p-core v0.20.1
 	github.com/libp2p/go-libp2p-daemon v0.5.0
 	github.com/libp2p/go-libp2p-kad-dht v0.23.0
+	github.com/libp2p/go-libp2p-noise v0.5.0
 	github.com/libp2p/go-libp2p-pubsub v0.9.3
 	github.com/mkideal/cli v0.2.7
 	github.com/multiformats/go-multiaddr v0.11.0
