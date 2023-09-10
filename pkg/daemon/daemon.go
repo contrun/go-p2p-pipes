@@ -11,12 +11,20 @@ import (
 	"net/http"
 	"os"
 	"strings"
+	"sync"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/protocol"
+
+	dht "github.com/libp2p/go-libp2p-kad-dht"
+	dhtopts "github.com/libp2p/go-libp2p-kad-dht/opts"
+	ps "github.com/libp2p/go-libp2p-pubsub"
+	ma "github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 
 	config "github.com/libp2p/go-libp2p-daemon/config"
-	ps "github.com/libp2p/go-libp2p-pubsub"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	connmgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
 	noise "github.com/libp2p/go-libp2p/p2p/security/noise"
@@ -57,6 +65,57 @@ func pprofHTTP(port int) {
 			return
 		}
 	}
+}
+
+type Daemon struct {
+	ctx      context.Context
+	host     host.Host
+	listener manet.Listener
+
+	dht    *dht.IpfsDHT
+	pubsub *ps.PubSub
+
+	mx sync.Mutex
+	// stream handlers: map of protocol.ID to multi-address
+	handlers map[protocol.ID]ma.Multiaddr
+	// closed is set when the daemon is shutting down
+	closed bool
+}
+
+func NewDaemon(ctx context.Context, maddr ma.Multiaddr, dhtMode string, opts ...libp2p.Option) (*Daemon, error) {
+	d := &Daemon{
+		ctx:      ctx,
+		handlers: make(map[protocol.ID]ma.Multiaddr),
+	}
+
+	if dhtMode != "" {
+		var dhtOpts []dhtopts.Option
+		if dhtMode == config.DHTClientMode {
+			dhtOpts = append(dhtOpts, dht.Mode(dht.ModeClient))
+		} else if dhtMode == config.DHTServerMode {
+			dhtOpts = append(dhtOpts, dht.Mode(dht.ModeServer))
+		}
+
+		opts = append(opts, libp2p.Routing(d.DHTRoutingFactory(dhtOpts)))
+	}
+
+	h, err := libp2p.New(opts...)
+	if err != nil {
+		return nil, err
+	}
+	d.host = h
+
+	l, err := manet.Listen(maddr)
+	if err != nil {
+		h.Close()
+		return nil, err
+	}
+	d.listener = l
+
+	go d.listen()
+	go d.trapSignals()
+
+	return d, nil
 }
 
 func main() {
@@ -348,7 +407,7 @@ func main() {
 	}
 
 	// start daemon
-	d, err := p2pd.NewDaemon(context.Background(), &c.ListenAddr, c.DHT.Mode, opts...)
+	d, err := NewDaemon(context.Background(), &c.ListenAddr, c.DHT.Mode, opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
