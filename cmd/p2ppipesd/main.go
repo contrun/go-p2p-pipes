@@ -5,9 +5,7 @@ import (
 	"context"
 	"encoding/json"
 	"flag"
-	"fmt"
 	"io"
-	"net/http"
 	"os"
 	"strings"
 	"time"
@@ -15,49 +13,10 @@ import (
 	"github.com/contrun/go-p2p-pipes/pkg/daemon"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p"
-	dht "github.com/libp2p/go-libp2p-kad-dht"
-	ps "github.com/libp2p/go-libp2p-pubsub"
-	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
-	"github.com/libp2p/go-libp2p/p2p/net/connmgr"
-	"github.com/libp2p/go-libp2p/p2p/security/noise"
-	tls "github.com/libp2p/go-libp2p/p2p/security/tls"
 	"github.com/multiformats/go-multiaddr"
-	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var log = logging.Logger("daemon")
-
-func pprofHTTP(port int) {
-	listen := func(p int) error {
-		addr := fmt.Sprintf("localhost:%d", p)
-		log.Infof("registering pprof debug http handler at: http://%s/debug/pprof/\n", addr)
-		switch err := http.ListenAndServe(addr, nil); err {
-		case nil:
-			// all good, server is running and exited normally.
-			return nil
-		case http.ErrServerClosed:
-			// all good, server was shut down.
-			return nil
-		default:
-			// error, try another port
-			log.Errorf("error registering pprof debug http handler at: %s: %s\n", addr, err)
-			return err
-		}
-	}
-
-	if port > 0 {
-		// we have a user-assigned port.
-		_ = listen(port)
-		return
-	}
-
-	// we don't have a user assigned port, try sequentially to bind between [6060-7080]
-	for i := 6060; i <= 7080; i++ {
-		if listen(i) == nil {
-			return
-		}
-	}
-}
 
 func main() {
 	maddrString := flag.String("listen", "/unix/tmp/p2pd.sock", "daemon control listen multiaddr")
@@ -105,10 +64,6 @@ func main() {
 	flag.Parse()
 
 	var c daemon.Config
-	opts := []libp2p.Option{
-		libp2p.UserAgent("p2pd/0.1"),
-		libp2p.DefaultTransports,
-	}
 
 	if *configStdin {
 		stdin := bufio.NewReader(os.Stdin)
@@ -236,9 +191,7 @@ func main() {
 		c.Bootstrap.Enabled = true
 	}
 
-	if *muxer == "yamux" {
-		opts = append(opts, libp2p.Muxer("/yamux/1.0.0", yamux.DefaultTransport))
-	}
+	c.Muxer = *muxer
 
 	if *quiet {
 		c.Quiet = true
@@ -270,75 +223,7 @@ func main() {
 		c.Security.Noise = *useNoise
 	}
 
-	if err := c.Validate(); err != nil {
-		log.Fatal(err)
-	}
-
-	if c.PProf.Enabled {
-		// an invalid port number will fail within the function.
-		go pprofHTTP(int(c.PProf.Port))
-	}
-
-	// collect opts
-	if c.ID != "" {
-		key, err := daemon.ReadIdentity(c.ID)
-		if err != nil {
-			log.Fatal(err)
-		}
-
-		opts = append(opts, libp2p.Identity(key))
-	}
-
-	if len(c.HostAddresses) > 0 {
-		opts = append(opts, libp2p.ListenAddrs(c.HostAddresses...))
-	}
-
-	if len(c.AnnounceAddresses) > 0 {
-		opts = append(opts, libp2p.AddrsFactory(func([]multiaddr.Multiaddr) []multiaddr.Multiaddr {
-			return c.AnnounceAddresses
-		}))
-	}
-
-	if c.ConnectionManager.Enabled {
-		cm, err := connmgr.NewConnManager(c.ConnectionManager.LowWaterMark,
-			c.ConnectionManager.HighWaterMark,
-			connmgr.WithGracePeriod(c.ConnectionManager.GracePeriod),
-		)
-		if err != nil {
-			panic(err)
-		}
-		opts = append(opts, libp2p.ConnectionManager(cm))
-	}
-
-	if c.NatPortMap {
-		opts = append(opts, libp2p.NATPortMap())
-	}
-
-	if c.AutoNat {
-		opts = append(opts, libp2p.EnableNATService())
-	}
-
-	if c.NoListen {
-		opts = append(opts,
-			libp2p.NoListenAddrs,
-			// NoListenAddrs disables the relay transport
-			libp2p.EnableRelay(),
-		)
-	}
-
-	var securityOpts []libp2p.Option
-	if c.Security.Noise {
-		securityOpts = append(securityOpts, libp2p.Security(noise.ID, noise.New))
-	}
-	if c.Security.TLS {
-		securityOpts = append(securityOpts, libp2p.Security(tls.ID, tls.New))
-	}
-
-	if len(securityOpts) == 0 {
-		log.Fatal("at least one channel security protocol must be enabled")
-	}
-	opts = append(opts, securityOpts...)
-
+	opts := []libp2p.Option{}
 	if *forceReachabilityPrivate && *forceReachabilityPublic {
 		log.Fatal("forceReachability must be public or private, not both")
 	} else if *forceReachabilityPrivate {
@@ -348,61 +233,9 @@ func main() {
 	}
 
 	// start daemon
-	d, err := daemon.NewDaemon(context.Background(), &c.ListenAddr, c.DHT.Mode, opts...)
+	_, err = daemon.NewDaemonFromConfig(context.Background(), c, opts...)
 	if err != nil {
 		log.Fatal(err)
-	}
-
-	if c.PubSub.Enabled {
-		if c.PubSub.GossipSubHeartbeat.Interval > 0 {
-			ps.GossipSubHeartbeatInterval = c.PubSub.GossipSubHeartbeat.Interval
-		}
-		if c.PubSub.GossipSubHeartbeat.InitialDelay > 0 {
-			ps.GossipSubHeartbeatInitialDelay = c.PubSub.GossipSubHeartbeat.InitialDelay
-		}
-
-		err = d.EnablePubsub(c.PubSub.Router, c.PubSub.Sign, c.PubSub.SignStrict)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	if c.Relay.Enabled {
-		err = d.EnableRelayV2()
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	if len(c.Bootstrap.Peers) == 0 {
-		c.Bootstrap.Peers = dht.DefaultBootstrapPeers
-	}
-
-	if c.Bootstrap.Enabled {
-		err = d.Bootstrap(c.Bootstrap.Peers)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
-	if !c.Quiet {
-		fmt.Printf("Control socket: %s\n", c.ListenAddr.String())
-		fmt.Printf("Peer ID: %s\n", d.ID().Pretty())
-		fmt.Printf("Peer Addrs:\n")
-		// for _, addr := range d.Addrs() {
-		// 	fmt.Printf("%s\n", addr.String())
-		// }
-		if c.Bootstrap.Enabled && len(c.Bootstrap.Peers) > 0 {
-			fmt.Printf("Bootstrap peers:\n")
-			for _, p := range c.Bootstrap.Peers {
-				fmt.Printf("%s\n", p)
-			}
-		}
-	}
-
-	if c.MetricsAddress != "" {
-		http.Handle("/metrics", promhttp.Handler())
-		go func() { http.ListenAndServe(c.MetricsAddress, nil) }()
 	}
 
 	select {}

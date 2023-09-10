@@ -107,6 +107,7 @@ type Config struct {
 	MetricsAddress    string
 	PProf             PProf
 	Security          Security
+	Muxer             string
 }
 
 func (c *Config) UnmarshalJSON(b []byte) error {
@@ -188,5 +189,6 @@ func NewDefaultConfig() Config {
 			Noise: true,
 			TLS:   true,
 		},
+		Muxer: "yamux",
 	}
 }
