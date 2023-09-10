@@ -92,7 +92,7 @@ const DHTClientMode = "client"
 const DHTServerMode = "server"
 
 type Config struct {
-	ListenAddr        JSONMaddr
+	ListenAddr        string
 	ID                string
 	Bootstrap         Bootstrap
 	DHT               DHT
@@ -140,9 +140,9 @@ func (c *Config) Validate() error {
 }
 
 func NewDefaultConfig() Config {
-	defaultListen, _ := multiaddr.NewMultiaddr("/unix/tmp/p2pd.sock")
+	defaultListen := "unix:/tmp/p2pd.sock"
 	return Config{
-		ListenAddr: JSONMaddr{defaultListen},
+		ListenAddr: defaultListen,
 		ID:         "",
 		Bootstrap: Bootstrap{
 			Enabled: false,

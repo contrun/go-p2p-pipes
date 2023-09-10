@@ -63,7 +63,7 @@ func getConfig(a *arguments) server.Config {
 	c := server.NewDefaultConfig()
 
 	if a.ListeningAddr != "" {
-		c.ListenAddr = server.JSONMaddr{Multiaddr: MustGetMultiaddr(a.ListeningAddr)}
+		c.ListenAddr = a.ListeningAddr
 	}
 	c.Bootstrap.Peers = MustGetMultiaddrs(a.BootstrapPeers)
 

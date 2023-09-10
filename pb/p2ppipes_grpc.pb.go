@@ -4,7 +4,7 @@
 // - protoc             v4.23.4
 // source: p2ppipes.proto
 
-package p2ppipes
+package pb
 
 import (
 	context "context"

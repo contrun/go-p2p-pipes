@@ -3,11 +3,14 @@ package server
 import (
 	"context"
 	"fmt"
+	"net"
 	"net/http"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
+	"github.com/contrun/go-p2p-pipes/pb"
 	"github.com/contrun/go-p2p-pipes/pkg/daemon"
 	multierror "github.com/hashicorp/go-multierror"
 	logging "github.com/ipfs/go-log"
@@ -19,18 +22,19 @@ import (
 	"github.com/libp2p/go-libp2p/p2p/security/noise"
 	tls "github.com/libp2p/go-libp2p/p2p/security/tls"
 	"github.com/multiformats/go-multiaddr"
-	manet "github.com/multiformats/go-multiaddr/net"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 var log = logging.Logger("server")
 
 type Server struct {
-	ctx        context.Context
-	done       chan struct{}
-	ListenAddr multiaddr.Multiaddr
-	Listener   manet.Listener
-	Daemon     *daemon.Daemon
+	pb.UnimplementedP2PPipeServer
+	ctx           context.Context
+	done          chan struct{}
+	ListenNetwork string
+	ListenAddr    string
+	Listener      net.Listener
+	Daemon        *daemon.Daemon
 }
 
 func NewServer(ctx context.Context, c Config, done chan struct{}, extra_opts ...libp2p.Option) (*Server, error) {
@@ -43,8 +47,8 @@ func NewServer(ctx context.Context, c Config, done chan struct{}, extra_opts ...
 
 	s.Daemon = daemon
 	s.ctx = ctx
-	s.ListenAddr = &c.ListenAddr
-	l, err := manet.Listen(s.ListenAddr)
+	s.ListenNetwork, s.ListenAddr = parse_address(c.ListenAddr)
+	l, err := net.Listen(s.ListenNetwork, s.ListenAddr)
 	if err != nil {
 		daemon.Close()
 		return nil, err
@@ -79,13 +83,20 @@ func (server *Server) trapSignals() {
 	}
 }
 
-func clearUnixSockets(path multiaddr.Multiaddr) error {
-	c, _ := multiaddr.SplitFirst(path)
-	if c.Protocol().Code != multiaddr.P_UNIX {
+func parse_address(s string) (string, string) {
+	if strings.HasPrefix(s, "unix:") {
+		ss := strings.SplitN(s, ":", 2)
+		return "unix", ss[1]
+	}
+	return "tcp", s
+}
+
+func (server *Server) clearUnixSockets() error {
+	if server.ListenNetwork != "unix" {
 		return nil
 	}
 
-	if err := os.Remove(c.Value()); err != nil {
+	if err := os.Remove(server.ListenAddr); err != nil {
 		return err
 	}
 
@@ -97,7 +108,7 @@ func (server *Server) Close() {
 	if err := server.Listener.Close(); err != nil {
 		merr = multierror.Append(err)
 	}
-	if err := clearUnixSockets(server.ListenAddr); err != nil {
+	if err := server.clearUnixSockets(); err != nil {
 		merr = multierror.Append(merr, err)
 	}
 	if err := server.Daemon.Close(); err != nil {
@@ -107,25 +118,9 @@ func (server *Server) Close() {
 	merr.ErrorOrNil()
 }
 
-func (server *Server) listen() {
-	for {
-		c, err := server.Listener.Accept()
-		if err != nil {
-			log.Errorw("error accepting connection", "error", err)
-			continue
-		}
-
-		log.Debug("incoming connection")
-		// TODO: handle connection here
-		// go d.handleConn(c)
-		_ = c
-
-	}
-}
-
 func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Option) (*daemon.Daemon, error) {
 	opts := []libp2p.Option{
-		libp2p.UserAgent("p2pd/0.1"),
+		libp2p.UserAgent("gop2ppipes/0.1"),
 		libp2p.DefaultTransports,
 	}
 	if c.Muxer == "yamux" {
@@ -205,7 +200,7 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 
 	opts = append(opts, extra_opts...)
 
-	d, err := daemon.NewDaemon(context.Background(), &c.ListenAddr, c.DHT.Mode, opts...)
+	d, err := daemon.NewDaemon(ctx, c.DHT.Mode, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -242,7 +237,7 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 		}
 	}
 
-	log.Infow("Starting daemon", "Control socket", c.ListenAddr.String(), "Peer ID", d.ID().Pretty(), "Addrs", d.Host.Addrs())
+	log.Infow("Starting daemon", "Control socket", c.ListenAddr, "Peer ID", d.ID().Pretty(), "Addrs", d.Host.Addrs())
 	if c.Bootstrap.Enabled && len(c.Bootstrap.Peers) > 0 {
 		log.Infow("Bootstrapping peers", "peers", c.Bootstrap.Peers)
 		d.Bootstrap(c.Bootstrap.Peers)

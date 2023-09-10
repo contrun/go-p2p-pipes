@@ -1,6 +1,6 @@
 syntax = "proto3";
 
-option go_package = "github.com/contrun/go-p2p-pipes/p2ppipes";
+option go_package = "github.com/contrun/go-p2p-pipes/p2ppipes/pb";
 
 package p2ppipes;
 
