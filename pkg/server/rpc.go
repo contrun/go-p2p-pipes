@@ -6,6 +6,7 @@ import (
 
 	"github.com/contrun/go-p2p-pipes/pb"
 	"google.golang.org/grpc"
+	"google.golang.org/grpc/reflection"
 )
 
 const UNIMPLEMENTED_ERROR_MESSAGE string = "unimplemented"
@@ -44,6 +45,7 @@ func (server *Server) listen() {
 
 	s := grpc.NewServer()
 	pb.RegisterP2PPipeServer(s, server)
+	reflection.Register(s)
 	if err := s.Serve(server.Listener); err != nil {
 		server.Close()
 		log.Fatalf("failed to serve: %v", err)
