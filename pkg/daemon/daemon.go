@@ -7,16 +7,20 @@ import (
 	"flag"
 	"fmt"
 	"io"
-	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p-core/peer"
+	"github.com/libp2p/go-libp2p-core/routing"
 	"github.com/libp2p/go-libp2p/core/host"
 	"github.com/libp2p/go-libp2p/core/protocol"
+	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
 
 	dht "github.com/libp2p/go-libp2p-kad-dht"
 	dhtopts "github.com/libp2p/go-libp2p-kad-dht/opts"
@@ -24,6 +28,8 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 
+	multierror "github.com/hashicorp/go-multierror"
+	logging "github.com/ipfs/go-log"
 	config "github.com/libp2p/go-libp2p-daemon/config"
 	"github.com/libp2p/go-libp2p/p2p/muxer/yamux"
 	connmgr "github.com/libp2p/go-libp2p/p2p/net/connmgr"
@@ -35,10 +41,12 @@ import (
 	_ "net/http/pprof"
 )
 
+var log = logging.Logger("p2pd")
+
 func pprofHTTP(port int) {
 	listen := func(p int) error {
 		addr := fmt.Sprintf("localhost:%d", p)
-		log.Printf("registering pprof debug http handler at: http://%s/debug/pprof/\n", addr)
+		log.Infof("registering pprof debug http handler at: http://%s/debug/pprof/\n", addr)
 		switch err := http.ListenAndServe(addr, nil); err {
 		case nil:
 			// all good, server is running and exited normally.
@@ -48,7 +56,7 @@ func pprofHTTP(port int) {
 			return nil
 		default:
 			// error, try another port
-			log.Printf("error registering pprof debug http handler at: %s: %s\n", addr, err)
+			log.Errorf("error registering pprof debug http handler at: %s: %s\n", addr, err)
 			return err
 		}
 	}
@@ -80,6 +88,180 @@ type Daemon struct {
 	handlers map[protocol.ID]ma.Multiaddr
 	// closed is set when the daemon is shutting down
 	closed bool
+}
+
+func (d *Daemon) DHTRoutingFactory(opts []dhtopts.Option) func(host.Host) (routing.PeerRouting, error) {
+	makeRouting := func(h host.Host) (routing.PeerRouting, error) {
+		dhtInst, err := dht.New(d.ctx, h, opts...)
+		if err != nil {
+			return nil, err
+		}
+		d.dht = dhtInst
+		return dhtInst, nil
+	}
+
+	return makeRouting
+}
+
+func (d *Daemon) EnableRelayV2() error {
+	_, err := relay.New(d.host)
+	return err
+}
+
+func (d *Daemon) EnablePubsub(router string, sign, strict bool) error {
+	var opts []ps.Option
+
+	if !sign {
+		opts = append(opts, ps.WithMessageSigning(false))
+	} else if !strict {
+		opts = append(opts, ps.WithStrictSignatureVerification(false))
+	} else {
+		opts = append(opts, ps.WithMessageSignaturePolicy(ps.StrictSign))
+	}
+
+	switch router {
+	case "floodsub":
+		pubsub, err := ps.NewFloodSub(d.ctx, d.host, opts...)
+		if err != nil {
+			return err
+		}
+		d.pubsub = pubsub
+		return nil
+
+	case "gossipsub":
+		pubsub, err := ps.NewGossipSub(d.ctx, d.host, opts...)
+		if err != nil {
+			return err
+		}
+		d.pubsub = pubsub
+		return nil
+
+	default:
+		return fmt.Errorf("unknown pubsub router: %s", router)
+	}
+
+}
+
+func (d *Daemon) ID() peer.ID {
+	return d.host.ID()
+}
+
+func (d *Daemon) listen() {
+	for {
+		if d.isClosed() {
+			return
+		}
+
+		c, err := d.listener.Accept()
+		if err != nil {
+			log.Errorw("error accepting connection", "error", err)
+			continue
+		}
+
+		log.Debug("incoming connection")
+		// TODO: handle connection here
+		// go d.handleConn(c)
+		_ = c
+
+	}
+}
+
+func (d *Daemon) isClosed() bool {
+	d.mx.Lock()
+	defer d.mx.Unlock()
+	return d.closed
+}
+
+func (d *Daemon) trapSignals() {
+	ch := make(chan os.Signal, 1)
+	signal.Notify(ch, syscall.SIGUSR1, syscall.SIGINT, syscall.SIGTERM)
+	for {
+		select {
+		case s := <-ch:
+			switch s {
+			case syscall.SIGUSR1:
+				d.handleSIGUSR1()
+			case syscall.SIGINT, syscall.SIGTERM:
+				d.Close()
+				os.Exit(0x80 + int(s.(syscall.Signal)))
+			default:
+				log.Warnw("uncaught signal", "signal", s)
+			}
+		case <-d.ctx.Done():
+			return
+		}
+	}
+}
+
+func (d *Daemon) handleSIGUSR1() {
+	// this is our signal to dump diagnostics info.
+	if d.dht != nil {
+		fmt.Println("DHT Routing Table:")
+		d.dht.RoutingTable().Print()
+		fmt.Println()
+		fmt.Println()
+	}
+
+	conns := d.host.Network().Conns()
+	fmt.Printf("Connections and streams (%d):\n", len(conns))
+
+	for _, c := range conns {
+		protos, _ := d.host.Peerstore().GetProtocols(c.RemotePeer()) // error value here is useless
+
+		protoVersion, err := d.host.Peerstore().Get(c.RemotePeer(), "ProtocolVersion")
+		if err != nil {
+			protoVersion = "(unknown)"
+		}
+
+		agent, err := d.host.Peerstore().Get(c.RemotePeer(), "AgentVersion")
+		if err != nil {
+			agent = "(unknown)"
+		}
+
+		streams := c.GetStreams()
+		fmt.Printf("peer: %s, multiaddr: %s\n", c.RemotePeer().Pretty(), c.RemoteMultiaddr())
+		fmt.Printf("\tprotoVersion: %s, agent: %s\n", protoVersion, agent)
+		fmt.Printf("\tprotocols: %v\n", protos)
+		fmt.Printf("\tstreams (%d):\n", len(streams))
+		for _, s := range streams {
+			fmt.Println("\t\tprotocol: ", s.Protocol())
+		}
+	}
+}
+
+func (d *Daemon) Close() error {
+	d.mx.Lock()
+	d.closed = true
+	d.mx.Unlock()
+
+	var merr *multierror.Error
+	if err := d.host.Close(); err != nil {
+		merr = multierror.Append(err)
+	}
+
+	listenAddr := d.listener.Multiaddr()
+	if err := d.listener.Close(); err != nil {
+		merr = multierror.Append(merr, err)
+	}
+
+	if err := clearUnixSockets(listenAddr); err != nil {
+		merr = multierror.Append(merr, err)
+	}
+
+	return merr.ErrorOrNil()
+}
+
+func clearUnixSockets(path ma.Multiaddr) error {
+	c, _ := ma.SplitFirst(path)
+	if c.Protocol().Code != ma.P_UNIX {
+		return nil
+	}
+
+	if err := os.Remove(c.Value()); err != nil {
+		return err
+	}
+
+	return nil
 }
 
 func NewDaemon(ctx context.Context, maddr ma.Multiaddr, dhtMode string, opts ...libp2p.Option) (*Daemon, error) {
@@ -124,7 +306,7 @@ func main() {
 	id := flag.String("id", "", "peer identity; private key file")
 	bootstrap := flag.Bool("b", false, "connects to bootstrap peers and bootstraps the dht if enabled")
 	bootstrapPeers := flag.String("bootstrapPeers", "", "comma separated list of bootstrap peers; defaults to the IPFS DHT peers")
-	dht := flag.Bool("dht", false, "Enables the DHT in full node mode")
+	enableDht := flag.Bool("dht", false, "Enables the DHT in full node mode")
 	dhtClient := flag.Bool("dhtClient", false, "Enables the DHT in client mode")
 	dhtServer := flag.Bool("dhtServer", false, "Enables the DHT in server mode (use 'dht' unless you actually need this)")
 	connMgr := flag.Bool("connManager", false, "Enables the Connection Manager")
@@ -307,7 +489,7 @@ func main() {
 		c.MetricsAddress = *metricsAddr
 	}
 
-	if *dht {
+	if *enableDht {
 		c.DHT.Mode = config.DHTFullMode
 	} else if *dhtClient {
 		c.DHT.Mode = config.DHTClientMode
@@ -340,7 +522,7 @@ func main() {
 
 	// collect opts
 	if c.ID != "" {
-		key, err := p2pd.ReadIdentity(c.ID)
+		key, err := ReadIdentity(c.ID)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -433,12 +615,12 @@ func main() {
 		}
 	}
 
-	if len(c.Bootstrap.Peers) > 0 {
-		p2pd.BootstrapPeers = c.Bootstrap.Peers
+	if len(c.Bootstrap.Peers) == 0 {
+		c.Bootstrap.Peers = dht.DefaultBootstrapPeers
 	}
 
 	if c.Bootstrap.Enabled {
-		err = d.Bootstrap()
+		err = d.Bootstrap(c.Bootstrap.Peers)
 		if err != nil {
 			log.Fatal(err)
 		}
@@ -448,12 +630,12 @@ func main() {
 		fmt.Printf("Control socket: %s\n", c.ListenAddr.String())
 		fmt.Printf("Peer ID: %s\n", d.ID().Pretty())
 		fmt.Printf("Peer Addrs:\n")
-		for _, addr := range d.Addrs() {
-			fmt.Printf("%s\n", addr.String())
-		}
+		// for _, addr := range d.Addrs() {
+		// 	fmt.Printf("%s\n", addr.String())
+		// }
 		if c.Bootstrap.Enabled && len(c.Bootstrap.Peers) > 0 {
 			fmt.Printf("Bootstrap peers:\n")
-			for _, p := range p2pd.BootstrapPeers {
+			for _, p := range c.Bootstrap.Peers {
 				fmt.Printf("%s\n", p)
 			}
 		}
@@ -461,7 +643,7 @@ func main() {
 
 	if c.MetricsAddress != "" {
 		http.Handle("/metrics", promhttp.Handler())
-		go func() { log.Println(http.ListenAndServe(c.MetricsAddress, nil)) }()
+		go func() { http.ListenAndServe(c.MetricsAddress, nil) }()
 	}
 
 	select {}
