@@ -1,0 +1,103 @@
+syntax = "proto3";
+
+option go_package = "github.com/contrun/go-p2p-pipes/p2ppipes";
+
+package p2ppipes;
+
+service P2PPipe {
+  rpc StartDiscoveringPeers (StartDiscoveringPeersRequest) returns (StartDiscoveringPeersResponse) {}
+  rpc StopDiscoveringPeers (StopDiscoveringPeersRequest) returns (StopDiscoveringPeersResponse) {}
+  rpc ListPeers (ListPeersRequest) returns (ListPeersResponse) {}
+  rpc ForwardIO (ForwardIORequest) returns (ForwardIOResponse) {}
+}
+
+enum ResponseType {
+  OK    = 0;
+  ERROR = 1;
+}
+
+enum PeerDiscoveryMethod {
+  UNDEFINED    = 0;
+  DHT = 1;
+  MDNS = 2;
+} 
+
+message DHTDiscoveryArguments {
+  string RendezvousPoint = 1;
+}
+
+message MDNSDiscoveryArguments {}
+
+message StartDiscoveringPeersRequest {
+  PeerDiscoveryMethod method = 1;
+  oneof arguments {
+    DHTDiscoveryArguments dht = 2;
+    MDNSDiscoveryArguments mdns = 3;
+  }
+}
+
+message StartDiscoveringPeersResponse {
+  ResponseType result = 1;
+  string message = 2;
+}
+
+message StopDiscoveringPeersRequest {
+  PeerDiscoveryMethod method = 1;
+}
+
+message StopDiscoveringPeersResponse {
+  ResponseType result = 1;
+  string message = 2;
+}
+
+enum PeerType {
+  PEERTYPEUNDEFIEND    = 0;
+  ALL = 1;
+  CONNECTED = 2;
+  DISCOVERED = 3;
+}
+
+message Peer {
+  bytes id = 1;
+  repeated bytes addresses = 2;
+}
+
+message ListPeersRequest {
+  PeerType peer_type = 1;
+}
+
+message ListPeersResponse {
+  ResponseType result = 1;
+  string message = 2;
+  repeated Peer peers = 3;
+}
+
+enum IOType {
+  IOTYPEUNDEFINED  = 0;
+  TCP = 1;
+  UDP = 2;
+  UNIX = 3;
+}
+
+message IO {
+  IOType io_type = 1;
+  oneof io {
+    string tcp = 2;
+    string udp = 3;
+    string unix = 4;
+  }
+}
+
+message ForwardIORequest {
+  Peer peer = 1;
+  IO remote_io = 2;
+  optional IO pipe = 3;
+  optional IO reader = 4;
+  optional IO writer = 5;
+}
+
+message ForwardIOResponse {
+  ResponseType result = 1;
+  string message = 2;
+}
+
