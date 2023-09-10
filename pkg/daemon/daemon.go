@@ -158,14 +158,12 @@ func (d *Daemon) trapSignals() {
 func (d *Daemon) handleSIGUSR1() {
 	// this is our signal to dump diagnostics info.
 	if d.dht != nil {
-		fmt.Println("DHT Routing Table:")
+		log.Infof("DHT Routing Table:")
 		d.dht.RoutingTable().Print()
-		fmt.Println()
-		fmt.Println()
 	}
 
 	conns := d.host.Network().Conns()
-	fmt.Printf("Connections and streams (%d):\n", len(conns))
+	log.Infof("Connections and streams (%d):\n", len(conns))
 
 	for _, c := range conns {
 		protos, _ := d.host.Peerstore().GetProtocols(c.RemotePeer()) // error value here is useless
@@ -181,12 +179,13 @@ func (d *Daemon) handleSIGUSR1() {
 		}
 
 		streams := c.GetStreams()
-		fmt.Printf("peer: %s, multiaddr: %s\n", c.RemotePeer().Pretty(), c.RemoteMultiaddr())
-		fmt.Printf("\tprotoVersion: %s, agent: %s\n", protoVersion, agent)
-		fmt.Printf("\tprotocols: %v\n", protos)
-		fmt.Printf("\tstreams (%d):\n", len(streams))
-		for _, s := range streams {
-			fmt.Println("\t\tprotocol: ", s.Protocol())
+		log.Infof("Dumpping stream info", "peer", c.RemotePeer().Pretty(), "multiaddr", c.RemoteMultiaddr(),
+			"protoVersion", protoVersion, "agent", agent,
+			"protocols", protos,
+			"streams", len(streams),
+		)
+		for i, s := range streams {
+			log.Infof("Dummping stream protocols", "stream index", i, "protocols", s.Protocol())
 		}
 	}
 }
@@ -381,19 +380,10 @@ func NewDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 		}
 	}
 
-	if !c.Quiet {
-		fmt.Printf("Control socket: %s\n", c.ListenAddr.String())
-		fmt.Printf("Peer ID: %s\n", d.ID().Pretty())
-		fmt.Printf("Peer Addrs:\n")
-		// for _, addr := range d.Addrs() {
-		// 	fmt.Printf("%s\n", addr.String())
-		// }
-		if c.Bootstrap.Enabled && len(c.Bootstrap.Peers) > 0 {
-			fmt.Printf("Bootstrap peers:\n")
-			for _, p := range c.Bootstrap.Peers {
-				fmt.Printf("%s\n", p)
-			}
-		}
+	log.Infow("Starting daemon", "Control socket", c.ListenAddr.String(), "Peer ID", d.ID().Pretty(), "Addrs", d.host.Addrs())
+	if c.Bootstrap.Enabled && len(c.Bootstrap.Peers) > 0 {
+		log.Infow("Bootstrapping peers", "peers", c.Bootstrap.Peers)
+		d.Bootstrap(c.Bootstrap.Peers)
 	}
 
 	if c.MetricsAddress != "" {
@@ -406,7 +396,7 @@ func NewDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 func pprofHTTP(port int) {
 	listen := func(p int) error {
 		addr := fmt.Sprintf("localhost:%d", p)
-		log.Infof("registering pprof debug http handler at: http://%s/debug/pprof/\n", addr)
+		log.Infow("registering pprof debug http handle", "addr", fmt.Sprintf("http://%s/debug/pprof/\n", addr))
 		switch err := http.ListenAndServe(addr, nil); err {
 		case nil:
 			// all good, server is running and exited normally.

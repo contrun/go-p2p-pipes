@@ -16,11 +16,15 @@ import (
 	"github.com/multiformats/go-multiaddr"
 )
 
-var log = logging.Logger("daemon")
+var log = logging.Logger("p2ppipesd")
 
 func main() {
+	loglevel := os.Getenv("GOLOG_LOG_LEVEL")
+	if loglevel == "" {
+		logging.SetLogLevel("*", "info")
+	}
+
 	maddrString := flag.String("listen", "/unix/tmp/p2pd.sock", "daemon control listen multiaddr")
-	quiet := flag.Bool("q", false, "be quiet")
 	id := flag.String("id", "", "peer identity; private key file")
 	bootstrap := flag.Bool("b", false, "connects to bootstrap peers and bootstraps the dht if enabled")
 	bootstrapPeers := flag.String("bootstrapPeers", "", "comma separated list of bootstrap peers; defaults to the IPFS DHT peers")
@@ -192,10 +196,6 @@ func main() {
 	}
 
 	c.Muxer = *muxer
-
-	if *quiet {
-		c.Quiet = true
-	}
 
 	if *metricsAddr != "" {
 		c.MetricsAddress = *metricsAddr

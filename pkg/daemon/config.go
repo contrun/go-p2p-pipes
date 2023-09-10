@@ -91,7 +91,6 @@ const DHTServerMode = "server"
 
 type Config struct {
 	ListenAddr        JSONMaddr
-	Quiet             bool
 	ID                string
 	Bootstrap         Bootstrap
 	DHT               DHT
@@ -142,7 +141,6 @@ func NewDefaultConfig() Config {
 	defaultListen, _ := multiaddr.NewMultiaddr("/unix/tmp/p2pd.sock")
 	return Config{
 		ListenAddr: JSONMaddr{defaultListen},
-		Quiet:      false,
 		ID:         "",
 		Bootstrap: Bootstrap{
 			Enabled: false,
