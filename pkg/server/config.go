@@ -94,6 +94,7 @@ const DHTServerMode = "server"
 type Config struct {
 	ListenAddr        string
 	ID                string
+	Namespace         string
 	Bootstrap         Bootstrap
 	DHT               DHT
 	ConnectionManager ConnectionManager
@@ -144,6 +145,7 @@ func NewDefaultConfig() Config {
 	return Config{
 		ListenAddr: defaultListen,
 		ID:         "",
+		Namespace:  "test",
 		Bootstrap: Bootstrap{
 			Enabled: false,
 			Peers:   make(MaddrArray, 0),

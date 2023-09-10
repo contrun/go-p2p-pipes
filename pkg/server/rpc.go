@@ -15,6 +15,27 @@ const UNIMPLEMENTED_ERROR_MESSAGE string = "unimplemented"
 var UNIMPLEMENTED_ERROR error = status.Error(codes.Unimplemented, UNIMPLEMENTED_ERROR_MESSAGE)
 
 func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscoveringPeersRequest) (*pb.StartDiscoveringPeersResponse, error) {
+	var response pb.StartDiscoveringPeersResponse
+	if in.Method == pb.PeerDiscoveryMethod_DHT {
+		dht := in.GetDht()
+		if dht == nil {
+			return nil, status.Error(codes.InvalidArgument, "Argument dht not passed")
+		}
+
+		ch, err := s.Daemon.FindDHTPeersAsync(ctx, dht.String(), 0)
+		if err != nil {
+			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		}
+
+		go func() {
+			for pi := range ch {
+				log.Debugw("Found peer from DHT", "peerinfo", pi)
+			}
+		}()
+
+		return &response, nil
+	}
+
 	return nil, UNIMPLEMENTED_ERROR
 }
 

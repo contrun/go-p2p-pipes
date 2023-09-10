@@ -8,6 +8,7 @@ import (
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-daemon/config"
 	"github.com/libp2p/go-libp2p/core/host"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/core/protocol"
 	"github.com/libp2p/go-libp2p/core/routing"
 	"github.com/libp2p/go-libp2p/p2p/protocol/circuitv2/relay"
@@ -25,10 +26,13 @@ import (
 
 var log = logging.Logger("daemon")
 
+var ERROR_NO_DHT = fmt.Errorf("DHT not available")
+
 type Daemon struct {
 	host.Host
-	ctx      context.Context
-	listener manet.Listener
+	namespace string
+	ctx       context.Context
+	listener  manet.Listener
 
 	dht    *dht.IpfsDHT
 	pubsub *ps.PubSub
@@ -51,6 +55,19 @@ func (d *Daemon) DHTRoutingFactory(opts []dhtopts.Option) func(host.Host) (routi
 	}
 
 	return makeRouting
+}
+
+func (d *Daemon) DHT() *dht.IpfsDHT {
+	return d.dht
+}
+
+func (d *Daemon) FindDHTPeersAsync(ctx context.Context, rdv string, count int) (<-chan peer.AddrInfo, error) {
+	dht := d.DHT()
+	if dht == nil {
+		return nil, ERROR_NO_DHT
+	}
+	log.Infow("Find via dht", "dht", d.DHT())
+	return d.DHT().FindProvidersAsync(ctx, d.getRendezvousCid(rdv), defaultProviderCount), nil
 }
 
 func (d *Daemon) EnableRelayV2() error {

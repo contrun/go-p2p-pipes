@@ -15,6 +15,7 @@ var log = logging.Logger("p2ppipesd")
 type arguments struct {
 	ListeningAddr            string
 	ID                       string
+	Namespace                string
 	Bootstrap                bool `default:"true"`
 	BootstrapPeers           []string
 	EnableDht                bool `default:"false"`
@@ -69,6 +70,9 @@ func getConfig(a *arguments) server.Config {
 
 	if a.ID != "" {
 		c.ID = a.ID
+	}
+	if a.Namespace != "" {
+		c.Namespace = a.Namespace
 	}
 
 	if len(a.HostAddrs) != 0 {
