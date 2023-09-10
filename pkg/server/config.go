@@ -1,11 +1,13 @@
-package daemon
+package server
 
 import (
 	"encoding/json"
 	"fmt"
+	"os"
 	"strings"
 	"time"
 
+	"github.com/libp2p/go-libp2p-core/crypto"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -189,4 +191,22 @@ func NewDefaultConfig() Config {
 		},
 		Muxer: "yamux",
 	}
+}
+
+func ReadIdentity(path string) (crypto.PrivKey, error) {
+	bytes, err := os.ReadFile(path)
+	if err != nil {
+		return nil, err
+	}
+
+	return crypto.UnmarshalPrivateKey(bytes)
+}
+
+func WriteIdentity(k crypto.PrivKey, path string) error {
+	bytes, err := crypto.MarshalPrivateKey(k)
+	if err != nil {
+		return err
+	}
+
+	return os.WriteFile(path, bytes, 0400)
 }

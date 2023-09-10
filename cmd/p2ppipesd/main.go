@@ -4,7 +4,7 @@ import (
 	"context"
 
 	"github.com/alexflint/go-arg"
-	"github.com/contrun/go-p2p-pipes/pkg/daemon"
+	"github.com/contrun/go-p2p-pipes/pkg/server"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p"
 	"github.com/multiformats/go-multiaddr"
@@ -59,11 +59,11 @@ func MustGetMultiaddrs(ss []string) (maddrs []multiaddr.Multiaddr) {
 	return
 }
 
-func getConfig(a *arguments) daemon.Config {
-	c := daemon.NewDefaultConfig()
+func getConfig(a *arguments) server.Config {
+	c := server.NewDefaultConfig()
 
 	if a.ListeningAddr != "" {
-		c.ListenAddr = daemon.JSONMaddr{Multiaddr: MustGetMultiaddr(a.ListeningAddr)}
+		c.ListenAddr = server.JSONMaddr{Multiaddr: MustGetMultiaddr(a.ListeningAddr)}
 	}
 	c.Bootstrap.Peers = MustGetMultiaddrs(a.BootstrapPeers)
 
@@ -101,11 +101,11 @@ func getConfig(a *arguments) daemon.Config {
 	}
 
 	if a.EnableDht {
-		c.DHT.Mode = daemon.DHTFullMode
+		c.DHT.Mode = server.DHTFullMode
 	} else if a.DhtClient {
-		c.DHT.Mode = daemon.DHTClientMode
+		c.DHT.Mode = server.DHTClientMode
 	} else if a.DhtServer {
-		c.DHT.Mode = daemon.DHTServerMode
+		c.DHT.Mode = server.DHTServerMode
 	}
 	if a.Pprof {
 		c.PProf.Enabled = true
@@ -134,12 +134,15 @@ func run() error {
 	}
 
 	// start daemon
-	_, err := daemon.NewDaemonFromConfig(context.Background(), c, opts...)
+
+	done := make(chan struct{}, 0)
+	_, err := server.NewServer(context.Background(), c, done, opts...)
 	if err != nil {
 		log.Fatal(err)
 	}
 
-	select {}
+	<-done
+	return nil
 }
 
 func main() {
