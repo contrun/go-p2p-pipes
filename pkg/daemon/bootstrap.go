@@ -43,6 +43,7 @@ func (d *Daemon) Bootstrap(peers []multiaddr.Multiaddr) error {
 	go d.keepBootstrapConnections(pis)
 
 	if d.dht != nil {
+		log.Infow("Bootstrapping dht", "mode", d.dht.Mode())
 		return d.dht.Bootstrap(d.ctx)
 	}
 
@@ -66,6 +67,7 @@ func (d *Daemon) connectBootstrapPeers(pis []peer.AddrInfo, toconnect int) int {
 			log.Debugw("Error connecting to bootstrap peer", "peer", pi.ID, "error", err)
 		} else {
 			d.Host.ConnManager().TagPeer(pi.ID, "bootstrap", 1)
+			log.Debugw("Connected to bootstrap peer", "peerinfo", pi)
 			count++
 			toconnect--
 		}

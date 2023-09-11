@@ -116,6 +116,13 @@ func (d *Daemon) DumpInfo() {
 		d.dht.RoutingTable().Print()
 	}
 
+	ps := d.Host.Peerstore()
+	ids := ps.Peers()
+	log.Infow("Dumping peer store", "#peers", len(ids))
+	for _, id := range ids {
+		log.Infow("Dumpping peer info", "peer info", ps.PeerInfo(id))
+	}
+
 	conns := d.Host.Network().Conns()
 	log.Infof("Connections and streams (%d):\n", len(conns))
 

@@ -29,7 +29,7 @@ func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscover
 
 		go func() {
 			for pi := range ch {
-				log.Debugw("Found peer from DHT", "peerinfo", pi)
+				log.Infow("Found peer from DHT", "peerinfo", pi)
 			}
 		}()
 
