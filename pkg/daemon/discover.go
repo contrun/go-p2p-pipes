@@ -28,5 +28,11 @@ func (d *Daemon) FindDHTPeersAsync(ctx context.Context, rdv string, count int) (
 		return nil, ERROR_NO_DHT
 	}
 	log.Infow("Find via dht", "dht", d.DHT())
+	cid := d.getRendezvousCid(rdv)
+	err := d.DHT().Provide(ctx, cid, true)
+	if err != nil {
+		log.Warnw("DHT error while providing", "rdv", rdv, "cid", cid, "error", err)
+		return nil, err
+	}
 	return d.DHT().FindProvidersAsync(ctx, d.getRendezvousCid(rdv), defaultProviderCount), nil
 }
