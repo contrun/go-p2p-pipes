@@ -2,6 +2,8 @@ package daemon
 
 import (
 	"context"
+	"encoding/binary"
+	"errors"
 	"io"
 	"net"
 	"strings"
@@ -16,7 +18,8 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
-var ForwardingProtocolID = protocol.ID("/gop2ppipes/forward/0.1.0")
+var ForwardingControlProtocolID = protocol.ID("/gop2ppipes/forward/control/0.1.0")
+var ForwardingDataProtocolID = protocol.ID("/gop2ppipes/forward//data/0.1.0")
 
 type SetupForwardingRequest struct {
 	// TODO: we should obtain the peer id from rpc the request connection
@@ -25,10 +28,43 @@ type SetupForwardingRequest struct {
 	Address string
 }
 
-type SetupForwardingResponse struct{}
+type SetupForwardingResponse struct {
+	AuthorizationCookie string
+}
 
 type ForwardingService struct {
 	daemon *Daemon
+}
+
+func writeAuthorizationCookie(writer io.Writer, cookie string) error {
+	var bytes = []byte(cookie)
+	var size = uint64(len(bytes))
+	var err error
+	err = binary.Write(writer, binary.BigEndian, size)
+	if err != nil {
+		return err
+	}
+	var written uint64 = 0
+	for written < size {
+		n, err := writer.Write(bytes[written:])
+		if err != nil {
+			return err
+		}
+		written = written + uint64(n)
+	}
+	return nil
+}
+
+func readAuthorizationCookie(reader io.Reader) (string, error) {
+	var size uint64
+	if err := binary.Read(reader, binary.BigEndian, &size); err != nil {
+		return "", err
+	}
+	b := make([]byte, size)
+	if _, err := io.ReadFull(reader, b); err != nil {
+		return "", err
+	}
+	return string(b), nil
 }
 
 // A RPC request to setup a protocol handler which will forward traffic back and forth between
@@ -45,12 +81,33 @@ func (d *ForwardingService) SetupForwarding(ctx context.Context, request SetupFo
 	if err != nil {
 		return err
 	}
-	protocolID := d.daemon.GetForwardingProtocolID(peer, addr)
+
+	cookie, err := d.daemon.GetAuthorizationCookie(peer, addr)
+	if err != nil {
+		return err
+	}
+	response.AuthorizationCookie = cookie
+	return nil
+}
+
+func (d *Daemon) RegisterForwardingService() error {
+	rpcHost := gorpc.NewServer(d.Host, ForwardingControlProtocolID)
+	svc := ForwardingService{d}
+	if err := rpcHost.Register(&svc); err != nil {
+		return err
+	}
 	streamHandler := func(s network.Stream) {
-		daemon := d.daemon
-		if !IsForwardingStreamAuthorized(s) {
+		daemon := d
+		cookie, err := readAuthorizationCookie(s)
+		if err != nil {
+			log.Debugw("Failed to obtain authorization cookie", "error", err)
 			s.Reset()
-			log.Debugf("Resetted unauthorized stream", "id", s.ID())
+			return
+		}
+		addr, err := d.GetRemoteAddrFromAuthorizationCookie(cookie)
+		if err != nil {
+			s.Reset()
+			log.Debugw("Resetted unauthorized stream", "id", s.ID(), "error", err)
 			return
 		}
 
@@ -61,27 +118,26 @@ func (d *ForwardingService) SetupForwarding(ctx context.Context, request SetupFo
 			return
 		}
 		defer c.Close()
-		defer daemon.RemoveStreamHandler(protocolID)
+		defer s.Close()
 		daemon.doStreamPipe(c, s)
 	}
 
-	d.daemon.SetStreamHandler(protocolID, streamHandler)
+	d.SetStreamHandler(ForwardingDataProtocolID, streamHandler)
 	return nil
 }
 
-func (d *Daemon) RegisterForwardingService() error {
-	rpcHost := gorpc.NewServer(d.Host, ForwardingProtocolID)
-	svc := ForwardingService{d}
-	return rpcHost.Register(&svc)
+// TODO: save a "real" cookie here and look up it later.
+func (d *Daemon) GetAuthorizationCookie(peer peer.ID, addr multiaddr.Multiaddr) (string, error) {
+	return peer.String() + "/" + addr.String(), nil
 }
 
-func (d *Daemon) GetForwardingProtocolID(peer peer.ID, addr multiaddr.Multiaddr) protocol.ID {
-	return protocol.ID(peer.String() + "/" + addr.String())
-}
-
-func IsForwardingStreamAuthorized(s network.Stream) bool {
-	log.Debugw("Check stream authorization", "protocol", s.Protocol(), "local peer", s.Conn().LocalPeer(), "remote peer", s.Conn().RemotePeer())
-	return strings.HasPrefix(string(s.Protocol()), s.Conn().RemotePeer().String()+"/")
+func (d *Daemon) GetRemoteAddrFromAuthorizationCookie(cookie string) (multiaddr.Multiaddr, error) {
+	var ma multiaddr.Multiaddr
+	addr := strings.SplitN(cookie, "/", 2)
+	if len(addr) != 2 {
+		return ma, errors.New("Invalid cookie")
+	}
+	return multiaddr.NewMultiaddr(addr[1])
 }
 
 func (d *Daemon) doStreamPipe(c net.Conn, s network.Stream) {
@@ -110,7 +166,7 @@ func (d *Daemon) doStreamPipe(c net.Conn, s network.Stream) {
 // The listener will be closed after this forwarding has finished.
 func (d *Daemon) ForwardTraffic(peer peer.ID, remoteAddr multiaddr.Multiaddr, localAddr multiaddr.Multiaddr) error {
 	// TODO: maybe with proactively clean up resources? or back pressue
-	rpcClient := gorpc.NewClient(d.Host, ForwardingProtocolID)
+	rpcClient := gorpc.NewClient(d.Host, ForwardingControlProtocolID)
 	request := SetupForwardingRequest{
 		ID:      d.ID().String(),
 		Address: remoteAddr.String(),
@@ -118,34 +174,39 @@ func (d *Daemon) ForwardTraffic(peer peer.ID, remoteAddr multiaddr.Multiaddr, lo
 	var response SetupForwardingResponse
 	err := rpcClient.Call(peer, "ForwardingService", "SetupForwarding", request, &response)
 	if err != nil {
+		log.Errorw("Error while calling rpc", "peer", peer, "error", err)
 		return err
 	}
-	// TODO: In case some malicious user request to open a forwarding stream,
-	// But it didn't actually connect to that stream. The server may register too many
-	// stream hanlders. We need to clean that up.
 	ctx := context.Background()
-	protocolID := d.GetForwardingProtocolID(peer, remoteAddr)
-	s, err := d.NewStream(ctx, peer, protocolID)
+	s, err := d.NewStream(ctx, peer, ForwardingDataProtocolID)
 	if err != nil {
-		log.Error("Error while starting new stream to peer", "peer", peer, "protocol", protocolID, "error", err)
+		log.Errorw("Error while starting new stream to peer", "peer", peer, "error", err)
 		return err
 	}
-	// TODO: do/can we still need to close the stream after it is resetted?
-	defer s.Close()
+	err = writeAuthorizationCookie(s, response.AuthorizationCookie)
+	if err != nil {
+		log.Errorw("Error while authorization cookie", "error", err)
+		s.Reset()
+		return err
+	}
 	listener, err := manet.Listen(localAddr)
 	if err != nil {
-		log.Error("Error while listening to local address", "addr", localAddr.String(), "error", err)
+		log.Errorw("Error while listening to local address", "addr", localAddr.String(), "error", err)
 		s.Reset()
 		return err
 	}
-	defer common.CloseMaNetListener(listener)
-	c, err := listener.Accept()
-	if err != nil {
-		log.Debugw("Error while accepting connection to local address", "addr", localAddr.String(), "error", err)
-		s.Reset()
-		return err
-	}
-	defer c.Close()
-	d.doStreamPipe(c, s)
+	// Don't block waiting for local listener to accept connections.
+	go func() {
+		defer common.CloseMaNetListener(listener)
+		c, err := listener.Accept()
+		if err != nil {
+			log.Debugw("Error while accepting connection to local address", "addr", localAddr.String(), "error", err)
+			s.Reset()
+			return
+		}
+		defer s.Close()
+		defer c.Close()
+		d.doStreamPipe(c, s)
+	}()
 	return nil
 }
