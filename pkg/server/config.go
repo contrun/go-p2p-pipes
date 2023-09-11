@@ -40,8 +40,9 @@ func (maa *MaddrArray) UnmarshalJSON(b []byte) error {
 }
 
 type Bootstrap struct {
-	Enabled bool
-	Peers   MaddrArray
+	Enabled         bool
+	Peers           MaddrArray
+	UseDefaultPeers bool
 }
 
 type ConnectionManager struct {
@@ -147,8 +148,9 @@ func NewDefaultConfig() Config {
 		ID:         "",
 		Namespace:  "test",
 		Bootstrap: Bootstrap{
-			Enabled: false,
-			Peers:   make(MaddrArray, 0),
+			Enabled:         false,
+			Peers:           make(MaddrArray, 0),
+			UseDefaultPeers: true,
 		},
 		DHT: DHT{
 			Mode: "",

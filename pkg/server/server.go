@@ -226,7 +226,7 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 		}
 	}
 
-	if len(c.Bootstrap.Peers) == 0 {
+	if len(c.Bootstrap.Peers) == 0 && c.Bootstrap.UseDefaultPeers {
 		c.Bootstrap.Peers = dht.DefaultBootstrapPeers
 	}
 

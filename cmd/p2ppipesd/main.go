@@ -16,6 +16,7 @@ type arguments struct {
 	ListeningAddr            string
 	ID                       string
 	Namespace                string
+	NoDefaultBootStrapPeers  bool `default:"false"`
 	Bootstrap                bool `default:"true"`
 	BootstrapPeers           []string
 	EnableDht                bool `default:"false"`
@@ -67,6 +68,7 @@ func getConfig(a *arguments) server.Config {
 		c.ListenAddr = a.ListeningAddr
 	}
 	c.Bootstrap.Peers = MustGetMultiaddrs(a.BootstrapPeers)
+	c.Bootstrap.UseDefaultPeers = !a.NoDefaultBootStrapPeers
 
 	if a.ID != "" {
 		c.ID = a.ID
