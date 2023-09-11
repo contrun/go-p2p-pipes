@@ -113,8 +113,8 @@ func ioToMultiaddr(io *pb.IO) (multiaddr.Multiaddr, error) {
 	}
 }
 
-func (s *Server) ForwardIO(ctx context.Context, in *pb.ForwardIORequest) (*pb.ForwardIOResponse, error) {
-	var response pb.ForwardIOResponse
+func (s *Server) StartForwardingIO(ctx context.Context, in *pb.StartForwardingIORequest) (*pb.StartForwardingIOResponse, error) {
+	var response pb.StartForwardingIOResponse
 	if in.Peer == nil {
 		return nil, status.Error(codes.InvalidArgument, "Peer not given")
 	}

@@ -8,11 +8,12 @@ service P2PPipe {
   rpc StartDiscoveringPeers (StartDiscoveringPeersRequest) returns (StartDiscoveringPeersResponse) {}
   rpc StopDiscoveringPeers (StopDiscoveringPeersRequest) returns (StopDiscoveringPeersResponse) {}
   rpc ListPeers (ListPeersRequest) returns (ListPeersResponse) {}
-  rpc ForwardIO (ForwardIORequest) returns (ForwardIOResponse) {}
+  rpc StartForwardingIO (StartForwardingIORequest) returns (StartForwardingIOResponse) {}
+  rpc StopForwardingIO (StopForwardingIORequest) returns (StopForwardingIOResponse) {}
 }
 
 enum PeerDiscoveryMethod {
-  UNDEFINED    = 0;
+  PEERDISCOVERYMETHODUNDEFINED    = 0;
   DHT = 1;
   MDNS = 2;
 } 
@@ -79,10 +80,16 @@ message IO {
   }
 }
 
-message ForwardIORequest {
+message StartForwardingIORequest {
   Peer peer = 1;
   IO remote_io = 2;
   IO local_io = 3;
 }
 
-message ForwardIOResponse {}
+message StartForwardingIOResponse {}
+
+message StopForwardingIORequest {
+  IO local_io = 1;
+}
+
+message StopForwardingIOResponse {}

@@ -22,7 +22,8 @@ const (
 	P2PPipe_StartDiscoveringPeers_FullMethodName = "/p2ppipes.P2PPipe/StartDiscoveringPeers"
 	P2PPipe_StopDiscoveringPeers_FullMethodName  = "/p2ppipes.P2PPipe/StopDiscoveringPeers"
 	P2PPipe_ListPeers_FullMethodName             = "/p2ppipes.P2PPipe/ListPeers"
-	P2PPipe_ForwardIO_FullMethodName             = "/p2ppipes.P2PPipe/ForwardIO"
+	P2PPipe_StartForwardingIO_FullMethodName     = "/p2ppipes.P2PPipe/StartForwardingIO"
+	P2PPipe_StopForwardingIO_FullMethodName      = "/p2ppipes.P2PPipe/StopForwardingIO"
 )
 
 // P2PPipeClient is the client API for P2PPipe service.
@@ -32,7 +33,8 @@ type P2PPipeClient interface {
 	StartDiscoveringPeers(ctx context.Context, in *StartDiscoveringPeersRequest, opts ...grpc.CallOption) (*StartDiscoveringPeersResponse, error)
 	StopDiscoveringPeers(ctx context.Context, in *StopDiscoveringPeersRequest, opts ...grpc.CallOption) (*StopDiscoveringPeersResponse, error)
 	ListPeers(ctx context.Context, in *ListPeersRequest, opts ...grpc.CallOption) (*ListPeersResponse, error)
-	ForwardIO(ctx context.Context, in *ForwardIORequest, opts ...grpc.CallOption) (*ForwardIOResponse, error)
+	StartForwardingIO(ctx context.Context, in *StartForwardingIORequest, opts ...grpc.CallOption) (*StartForwardingIOResponse, error)
+	StopForwardingIO(ctx context.Context, in *StopForwardingIORequest, opts ...grpc.CallOption) (*StopForwardingIOResponse, error)
 }
 
 type p2PPipeClient struct {
@@ -70,9 +72,18 @@ func (c *p2PPipeClient) ListPeers(ctx context.Context, in *ListPeersRequest, opt
 	return out, nil
 }
 
-func (c *p2PPipeClient) ForwardIO(ctx context.Context, in *ForwardIORequest, opts ...grpc.CallOption) (*ForwardIOResponse, error) {
-	out := new(ForwardIOResponse)
-	err := c.cc.Invoke(ctx, P2PPipe_ForwardIO_FullMethodName, in, out, opts...)
+func (c *p2PPipeClient) StartForwardingIO(ctx context.Context, in *StartForwardingIORequest, opts ...grpc.CallOption) (*StartForwardingIOResponse, error) {
+	out := new(StartForwardingIOResponse)
+	err := c.cc.Invoke(ctx, P2PPipe_StartForwardingIO_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
+func (c *p2PPipeClient) StopForwardingIO(ctx context.Context, in *StopForwardingIORequest, opts ...grpc.CallOption) (*StopForwardingIOResponse, error) {
+	out := new(StopForwardingIOResponse)
+	err := c.cc.Invoke(ctx, P2PPipe_StopForwardingIO_FullMethodName, in, out, opts...)
 	if err != nil {
 		return nil, err
 	}
@@ -86,7 +97,8 @@ type P2PPipeServer interface {
 	StartDiscoveringPeers(context.Context, *StartDiscoveringPeersRequest) (*StartDiscoveringPeersResponse, error)
 	StopDiscoveringPeers(context.Context, *StopDiscoveringPeersRequest) (*StopDiscoveringPeersResponse, error)
 	ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error)
-	ForwardIO(context.Context, *ForwardIORequest) (*ForwardIOResponse, error)
+	StartForwardingIO(context.Context, *StartForwardingIORequest) (*StartForwardingIOResponse, error)
+	StopForwardingIO(context.Context, *StopForwardingIORequest) (*StopForwardingIOResponse, error)
 	mustEmbedUnimplementedP2PPipeServer()
 }
 
@@ -103,8 +115,11 @@ func (UnimplementedP2PPipeServer) StopDiscoveringPeers(context.Context, *StopDis
 func (UnimplementedP2PPipeServer) ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPeers not implemented")
 }
-func (UnimplementedP2PPipeServer) ForwardIO(context.Context, *ForwardIORequest) (*ForwardIOResponse, error) {
-	return nil, status.Errorf(codes.Unimplemented, "method ForwardIO not implemented")
+func (UnimplementedP2PPipeServer) StartForwardingIO(context.Context, *StartForwardingIORequest) (*StartForwardingIOResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StartForwardingIO not implemented")
+}
+func (UnimplementedP2PPipeServer) StopForwardingIO(context.Context, *StopForwardingIORequest) (*StopForwardingIOResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method StopForwardingIO not implemented")
 }
 func (UnimplementedP2PPipeServer) mustEmbedUnimplementedP2PPipeServer() {}
 
@@ -173,20 +188,38 @@ func _P2PPipe_ListPeers_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
-func _P2PPipe_ForwardIO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
-	in := new(ForwardIORequest)
+func _P2PPipe_StartForwardingIO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StartForwardingIORequest)
 	if err := dec(in); err != nil {
 		return nil, err
 	}
 	if interceptor == nil {
-		return srv.(P2PPipeServer).ForwardIO(ctx, in)
+		return srv.(P2PPipeServer).StartForwardingIO(ctx, in)
 	}
 	info := &grpc.UnaryServerInfo{
 		Server:     srv,
-		FullMethod: P2PPipe_ForwardIO_FullMethodName,
+		FullMethod: P2PPipe_StartForwardingIO_FullMethodName,
 	}
 	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
-		return srv.(P2PPipeServer).ForwardIO(ctx, req.(*ForwardIORequest))
+		return srv.(P2PPipeServer).StartForwardingIO(ctx, req.(*StartForwardingIORequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
+func _P2PPipe_StopForwardingIO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(StopForwardingIORequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(P2PPipeServer).StopForwardingIO(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: P2PPipe_StopForwardingIO_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(P2PPipeServer).StopForwardingIO(ctx, req.(*StopForwardingIORequest))
 	}
 	return interceptor(ctx, in, info, handler)
 }
@@ -211,8 +244,12 @@ var P2PPipe_ServiceDesc = grpc.ServiceDesc{
 			Handler:    _P2PPipe_ListPeers_Handler,
 		},
 		{
-			MethodName: "ForwardIO",
-			Handler:    _P2PPipe_ForwardIO_Handler,
+			MethodName: "StartForwardingIO",
+			Handler:    _P2PPipe_StartForwardingIO_Handler,
+		},
+		{
+			MethodName: "StopForwardingIO",
+			Handler:    _P2PPipe_StopForwardingIO_Handler,
 		},
 	},
 	Streams:  []grpc.StreamDesc{},
