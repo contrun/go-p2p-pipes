@@ -18,7 +18,7 @@ enum PeerDiscoveryMethod {
 } 
 
 message DHTDiscoveryArguments {
-  string RendezvousPoint = 1;
+  string rvz = 1;
 }
 
 message MDNSDiscoveryArguments {}
