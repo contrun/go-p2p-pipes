@@ -230,17 +230,13 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 		c.Bootstrap.Peers = dht.DefaultBootstrapPeers
 	}
 
-	if c.Bootstrap.Enabled {
-		err = d.Bootstrap(c.Bootstrap.Peers)
-		if err != nil {
-			log.Fatal(err)
-		}
-	}
-
 	log.Infow("Starting daemon", "Control socket", c.ListenAddr, "Peer ID", d.ID().Pretty(), "Addrs", d.Host.Addrs())
 	if c.Bootstrap.Enabled && len(c.Bootstrap.Peers) > 0 {
 		log.Infow("Bootstrapping peers", "peers", c.Bootstrap.Peers)
-		d.Bootstrap(c.Bootstrap.Peers)
+		err = d.Bootstrap(c.Bootstrap.Peers)
+		if err != nil {
+			log.Errorw("Bootstrap failed", "error", err)
+		}
 	}
 
 	if c.MetricsAddress != "" {
