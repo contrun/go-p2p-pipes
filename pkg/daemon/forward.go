@@ -103,7 +103,11 @@ func (d *Daemon) doStreamPipe(c net.Conn, s network.Stream) {
 	wg.Wait()
 }
 
-func (d *Daemon) RequestForwarding(peer peer.ID, remoteAddr multiaddr.Multiaddr, localAddr multiaddr.Multiaddr) error {
+// Listen to the local multiaddr and forward any traffic from the first
+// connection to this address to the remote peer.
+// Remote peer would then forward the traffic to the remote address.
+// The listener will be closed after this forwarding has finished.
+func (d *Daemon) ForwardTraffic(peer peer.ID, remoteAddr multiaddr.Multiaddr, localAddr multiaddr.Multiaddr) error {
 	// TODO: maybe with proactively clean up resources? or back pressue
 	rpcClient := gorpc.NewClient(d.Host, ForwardingProtocolID)
 	request := SetupForwardingRequest{
@@ -122,11 +126,21 @@ func (d *Daemon) RequestForwarding(peer peer.ID, remoteAddr multiaddr.Multiaddr,
 	protocolID := d.GetForwardingProtocolID(peer, remoteAddr)
 	s, err := d.NewStream(ctx, peer, protocolID)
 	if err != nil {
+		log.Error("Error while starting new stream to peer", "peer", peer, "protocol", protocolID, "error", err)
 		return err
 	}
-	c, err := manet.Dial(localAddr)
+	// TODO: do/can we still need to close the stream after it is resetted?
+	defer s.Close()
+	listener, err := manet.Listen(localAddr)
 	if err != nil {
-		log.Debugw("Error dialing to local address", "addr", localAddr.String(), "error", err)
+		log.Error("Error while listening to local address", "addr", localAddr.String(), "error", err)
+		s.Reset()
+		return err
+	}
+	defer listener.Close()
+	c, err := listener.Accept()
+	if err != nil {
+		log.Debugw("Error while accepting connection to local address", "addr", localAddr.String(), "error", err)
 		s.Reset()
 		return err
 	}
