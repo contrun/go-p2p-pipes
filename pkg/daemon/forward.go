@@ -7,6 +7,7 @@ import (
 	"strings"
 	"sync"
 
+	"github.com/contrun/go-p2p-pipes/pkg/common"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
 	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
@@ -137,7 +138,7 @@ func (d *Daemon) ForwardTraffic(peer peer.ID, remoteAddr multiaddr.Multiaddr, lo
 		s.Reset()
 		return err
 	}
-	defer listener.Close()
+	defer common.CloseMaNetListener(listener)
 	c, err := listener.Accept()
 	if err != nil {
 		log.Debugw("Error while accepting connection to local address", "addr", localAddr.String(), "error", err)

@@ -2,8 +2,14 @@ package server
 
 import (
 	"context"
+	"fmt"
+	"net"
+	"time"
 
 	"github.com/contrun/go-p2p-pipes/pb"
+	"github.com/libp2p/go-libp2p/core/peer"
+	"github.com/multiformats/go-multiaddr"
+	manet "github.com/multiformats/go-multiaddr/net"
 	"google.golang.org/grpc"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/reflection"
@@ -47,8 +53,102 @@ func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.Li
 	return nil, UNIMPLEMENTED_ERROR
 }
 
+func validateIO(io *pb.IO) error {
+	if io == nil {
+		return fmt.Errorf("IO should not be nil")
+	}
+	switch io.IoType {
+	case pb.IOType_IOTYPEUNDEFINED:
+		return fmt.Errorf("IO type is undefined")
+	case pb.IOType_TCP:
+		if io.GetTcp() == "" {
+			return fmt.Errorf("Address not provided in Tcp")
+		} else {
+			return nil
+		}
+	case pb.IOType_UDP:
+		if io.GetUdp() == "" {
+			return fmt.Errorf("Address not provided in Udp")
+		} else {
+			return nil
+		}
+	case pb.IOType_UNIX:
+		if io.GetUnix() == "" {
+			return fmt.Errorf("Address not provided in Unix")
+		} else {
+			return nil
+		}
+	default:
+		return nil
+	}
+}
+
+func ioToMultiaddr(io *pb.IO) (multiaddr.Multiaddr, error) {
+	var ma multiaddr.Multiaddr
+	if err := validateIO(io); err != nil {
+		return ma, err
+	}
+
+	switch io.IoType {
+	case pb.IOType_TCP:
+		addr, err := net.ResolveTCPAddr("tcp", io.GetTcp())
+		if err != nil {
+			return ma, err
+		}
+		return manet.FromNetAddr(addr)
+	case pb.IOType_UDP:
+		addr, err := net.ResolveUDPAddr("udp", io.GetUdp())
+		if err != nil {
+			return ma, err
+		}
+		return manet.FromNetAddr(addr)
+	case pb.IOType_UNIX:
+		addr, err := net.ResolveUnixAddr("unix", io.GetUnix())
+		if err != nil {
+			return ma, err
+		}
+		return manet.FromNetAddr(addr)
+	default:
+		return ma, fmt.Errorf("Unsupported IO type %s", io.IoType)
+	}
+}
+
 func (s *Server) ForwardIO(ctx context.Context, in *pb.ForwardIORequest) (*pb.ForwardIOResponse, error) {
-	return nil, UNIMPLEMENTED_ERROR
+	var response pb.ForwardIOResponse
+	if in.Peer == nil {
+		return nil, status.Error(codes.InvalidArgument, "Peer not given")
+	}
+	peer, err := peer.Decode(in.Peer.GetId())
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid peer id %s", in.Peer.GetId()))
+	}
+	if addrs := in.Peer.GetAddresses(); len(addrs) != 0 {
+		mas := make([]multiaddr.Multiaddr, len(addrs))
+		for _, addr := range addrs {
+			ma, err := multiaddr.NewMultiaddr(addr)
+			if err != nil {
+				return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid peer addr %s", addr))
+			}
+			mas = append(mas, ma)
+		}
+		s.Daemon.Peerstore().AddAddrs(peer, mas, time.Duration(time.Second*60))
+	}
+	if in.RemoteIo == nil || in.LocalIo == nil {
+		return nil, status.Error(codes.InvalidArgument, "Addresses to forward traffic not given")
+	}
+	remoteAddr, err := ioToMultiaddr(in.RemoteIo)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid remote addr %s", in.RemoteIo))
+	}
+	localAddr, err := ioToMultiaddr(in.LocalIo)
+	if err != nil {
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid local addr %s", in.LocalIo))
+	}
+	err = s.Daemon.ForwardTraffic(peer, remoteAddr, localAddr)
+	if err != nil {
+		return &response, status.Error(codes.Internal, err.Error())
+	}
+	return &response, nil
 }
 
 func (server *Server) listen() {

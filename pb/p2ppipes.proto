@@ -47,8 +47,8 @@ enum PeerType {
 }
 
 message Peer {
-  bytes id = 1;
-  repeated bytes addresses = 2;
+  string id = 1;
+  repeated string addresses = 2;
 }
 
 message ListPeersRequest {
