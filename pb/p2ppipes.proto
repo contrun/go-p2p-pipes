@@ -61,26 +61,28 @@ message ListPeersResponse {
 
 enum IOType {
   IOTYPEUNDEFINED  = 0;
-  TCP = 1;
-  UDP = 2;
-  UNIX = 3;
+  NULL = 1; // Output will be ignored, while input will be null.
+  TCP = 2;
+  UDP = 3;
+  UNIX = 4;
 }
+
+message NullIO {}
 
 message IO {
   IOType io_type = 1;
   oneof io {
-    string tcp = 2;
-    string udp = 3;
-    string unix = 4;
+    NullIO null = 2;
+    string tcp = 3;
+    string udp = 4;
+    string unix = 5;
   }
 }
 
 message ForwardIORequest {
   Peer peer = 1;
   IO remote_io = 2;
-  optional IO pipe = 3;
-  optional IO reader = 4;
-  optional IO writer = 5;
+  IO local_io = 3;
 }
 
 message ForwardIOResponse {}
