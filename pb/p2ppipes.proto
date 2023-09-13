@@ -8,6 +8,7 @@ service P2PPipe {
   rpc StartDiscoveringPeers (StartDiscoveringPeersRequest) returns (StartDiscoveringPeersResponse) {}
   rpc StopDiscoveringPeers (StopDiscoveringPeersRequest) returns (StopDiscoveringPeersResponse) {}
   rpc ListPeers (ListPeersRequest) returns (ListPeersResponse) {}
+  rpc ListDiscoveredPeers (ListDiscoveredPeersRequest) returns (ListDiscoveredPeersResponse) {}
   rpc StartForwardingIO (StartForwardingIORequest) returns (StartForwardingIOResponse) {}
   rpc StopForwardingIO (StopForwardingIORequest) returns (StopForwardingIOResponse) {}
 }
@@ -57,6 +58,18 @@ message ListPeersRequest {
 }
 
 message ListPeersResponse {
+  repeated Peer peers = 1;
+}
+
+message ListDiscoveredPeersRequest {
+  PeerDiscoveryMethod method = 1;
+  oneof arguments {
+    DHTDiscoveryArguments dht = 2;
+    MDNSDiscoveryArguments mdns = 3;
+  }
+}
+
+message ListDiscoveredPeersResponse {
   repeated Peer peers = 1;
 }
 

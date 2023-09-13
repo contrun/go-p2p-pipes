@@ -27,17 +27,15 @@ func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscover
 		if dht == nil {
 			return nil, status.Error(codes.InvalidArgument, "Argument dht not passed")
 		}
-
-		ch, err := s.Daemon.FindDHTPeersAsync(ctx, dht.String(), 0)
-		if err != nil {
-			return nil, status.Error(codes.FailedPrecondition, err.Error())
+		rv := dht.GetRv()
+		if rv == "" {
+			return nil, status.Error(codes.InvalidArgument, "Argument rv dht not passed")
 		}
 
-		go func() {
-			for pi := range ch {
-				log.Infow("Found peer from DHT", "peerinfo", pi)
-			}
-		}()
+		err := s.Daemon.BroadcastPeerInfoViaDHT(ctx, rv)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
 
 		return &response, nil
 	}
@@ -51,6 +49,49 @@ func (s *Server) StopDiscoveringPeers(ctx context.Context, in *pb.StopDiscoverin
 
 func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.ListPeersResponse, error) {
 	return nil, UNIMPLEMENTED_ERROR
+}
+
+func (s *Server) ListDiscoveredPeers(ctx context.Context, in *pb.ListDiscoveredPeersRequest) (*pb.ListDiscoveredPeersResponse, error) {
+	var response pb.ListDiscoveredPeersResponse
+	if in.Method == pb.PeerDiscoveryMethod_DHT {
+		dht := in.GetDht()
+		if dht == nil {
+			return nil, status.Error(codes.InvalidArgument, "Argument dht not passed")
+		}
+
+		rv := dht.GetRv()
+		if rv == "" {
+			return nil, status.Error(codes.InvalidArgument, "Argument rv dht not passed")
+		}
+
+		peers, err := s.Daemon.FindPeersViaDHTSync(ctx, rv, 0)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+		log.Debugw("Found peers via DHT", "#peers", len(peers), "peers", peers)
+		response.Peers = addrInfosToPBPeers(peers)
+
+		return &response, nil
+	}
+
+	return nil, UNIMPLEMENTED_ERROR
+}
+
+func addrInfoToPBPeer(peer peer.AddrInfo) *pb.Peer {
+	var p pb.Peer
+	p.Id = peer.ID.String()
+	for _, addr := range peer.Addrs {
+		p.Addresses = append(p.Addresses, addr.String())
+	}
+	return &p
+}
+
+func addrInfosToPBPeers(peers []peer.AddrInfo) []*pb.Peer {
+	var ps = make([]*pb.Peer, len(peers))
+	for _, peer := range peers {
+		ps = append(ps, addrInfoToPBPeer(peer))
+	}
+	return ps
 }
 
 func validateIO(io *pb.IO) error {

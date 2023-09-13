@@ -22,6 +22,7 @@ const (
 	P2PPipe_StartDiscoveringPeers_FullMethodName = "/p2ppipes.P2PPipe/StartDiscoveringPeers"
 	P2PPipe_StopDiscoveringPeers_FullMethodName  = "/p2ppipes.P2PPipe/StopDiscoveringPeers"
 	P2PPipe_ListPeers_FullMethodName             = "/p2ppipes.P2PPipe/ListPeers"
+	P2PPipe_ListDiscoveredPeers_FullMethodName   = "/p2ppipes.P2PPipe/ListDiscoveredPeers"
 	P2PPipe_StartForwardingIO_FullMethodName     = "/p2ppipes.P2PPipe/StartForwardingIO"
 	P2PPipe_StopForwardingIO_FullMethodName      = "/p2ppipes.P2PPipe/StopForwardingIO"
 )
@@ -33,6 +34,7 @@ type P2PPipeClient interface {
 	StartDiscoveringPeers(ctx context.Context, in *StartDiscoveringPeersRequest, opts ...grpc.CallOption) (*StartDiscoveringPeersResponse, error)
 	StopDiscoveringPeers(ctx context.Context, in *StopDiscoveringPeersRequest, opts ...grpc.CallOption) (*StopDiscoveringPeersResponse, error)
 	ListPeers(ctx context.Context, in *ListPeersRequest, opts ...grpc.CallOption) (*ListPeersResponse, error)
+	ListDiscoveredPeers(ctx context.Context, in *ListDiscoveredPeersRequest, opts ...grpc.CallOption) (*ListDiscoveredPeersResponse, error)
 	StartForwardingIO(ctx context.Context, in *StartForwardingIORequest, opts ...grpc.CallOption) (*StartForwardingIOResponse, error)
 	StopForwardingIO(ctx context.Context, in *StopForwardingIORequest, opts ...grpc.CallOption) (*StopForwardingIOResponse, error)
 }
@@ -72,6 +74,15 @@ func (c *p2PPipeClient) ListPeers(ctx context.Context, in *ListPeersRequest, opt
 	return out, nil
 }
 
+func (c *p2PPipeClient) ListDiscoveredPeers(ctx context.Context, in *ListDiscoveredPeersRequest, opts ...grpc.CallOption) (*ListDiscoveredPeersResponse, error) {
+	out := new(ListDiscoveredPeersResponse)
+	err := c.cc.Invoke(ctx, P2PPipe_ListDiscoveredPeers_FullMethodName, in, out, opts...)
+	if err != nil {
+		return nil, err
+	}
+	return out, nil
+}
+
 func (c *p2PPipeClient) StartForwardingIO(ctx context.Context, in *StartForwardingIORequest, opts ...grpc.CallOption) (*StartForwardingIOResponse, error) {
 	out := new(StartForwardingIOResponse)
 	err := c.cc.Invoke(ctx, P2PPipe_StartForwardingIO_FullMethodName, in, out, opts...)
@@ -97,6 +108,7 @@ type P2PPipeServer interface {
 	StartDiscoveringPeers(context.Context, *StartDiscoveringPeersRequest) (*StartDiscoveringPeersResponse, error)
 	StopDiscoveringPeers(context.Context, *StopDiscoveringPeersRequest) (*StopDiscoveringPeersResponse, error)
 	ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error)
+	ListDiscoveredPeers(context.Context, *ListDiscoveredPeersRequest) (*ListDiscoveredPeersResponse, error)
 	StartForwardingIO(context.Context, *StartForwardingIORequest) (*StartForwardingIOResponse, error)
 	StopForwardingIO(context.Context, *StopForwardingIORequest) (*StopForwardingIOResponse, error)
 	mustEmbedUnimplementedP2PPipeServer()
@@ -114,6 +126,9 @@ func (UnimplementedP2PPipeServer) StopDiscoveringPeers(context.Context, *StopDis
 }
 func (UnimplementedP2PPipeServer) ListPeers(context.Context, *ListPeersRequest) (*ListPeersResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method ListPeers not implemented")
+}
+func (UnimplementedP2PPipeServer) ListDiscoveredPeers(context.Context, *ListDiscoveredPeersRequest) (*ListDiscoveredPeersResponse, error) {
+	return nil, status.Errorf(codes.Unimplemented, "method ListDiscoveredPeers not implemented")
 }
 func (UnimplementedP2PPipeServer) StartForwardingIO(context.Context, *StartForwardingIORequest) (*StartForwardingIOResponse, error) {
 	return nil, status.Errorf(codes.Unimplemented, "method StartForwardingIO not implemented")
@@ -188,6 +203,24 @@ func _P2PPipe_ListPeers_Handler(srv interface{}, ctx context.Context, dec func(i
 	return interceptor(ctx, in, info, handler)
 }
 
+func _P2PPipe_ListDiscoveredPeers_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
+	in := new(ListDiscoveredPeersRequest)
+	if err := dec(in); err != nil {
+		return nil, err
+	}
+	if interceptor == nil {
+		return srv.(P2PPipeServer).ListDiscoveredPeers(ctx, in)
+	}
+	info := &grpc.UnaryServerInfo{
+		Server:     srv,
+		FullMethod: P2PPipe_ListDiscoveredPeers_FullMethodName,
+	}
+	handler := func(ctx context.Context, req interface{}) (interface{}, error) {
+		return srv.(P2PPipeServer).ListDiscoveredPeers(ctx, req.(*ListDiscoveredPeersRequest))
+	}
+	return interceptor(ctx, in, info, handler)
+}
+
 func _P2PPipe_StartForwardingIO_Handler(srv interface{}, ctx context.Context, dec func(interface{}) error, interceptor grpc.UnaryServerInterceptor) (interface{}, error) {
 	in := new(StartForwardingIORequest)
 	if err := dec(in); err != nil {
@@ -242,6 +275,10 @@ var P2PPipe_ServiceDesc = grpc.ServiceDesc{
 		{
 			MethodName: "ListPeers",
 			Handler:    _P2PPipe_ListPeers_Handler,
+		},
+		{
+			MethodName: "ListDiscoveredPeers",
+			Handler:    _P2PPipe_ListDiscoveredPeers_Handler,
 		},
 		{
 			MethodName: "StartForwardingIO",
