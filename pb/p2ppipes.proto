@@ -19,7 +19,7 @@ enum PeerDiscoveryMethod {
 } 
 
 message DHTDiscoveryArguments {
-  string rvz = 1;
+  string rv = 1;
 }
 
 message MDNSDiscoveryArguments {}
