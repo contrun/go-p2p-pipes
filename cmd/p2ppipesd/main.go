@@ -7,6 +7,7 @@ import (
 	"github.com/contrun/go-p2p-pipes/pkg/server"
 	logging "github.com/ipfs/go-log"
 	"github.com/libp2p/go-libp2p"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -19,6 +20,7 @@ type arguments struct {
 	NoDefaultBootStrapPeers  bool `default:"false"`
 	Bootstrap                bool `default:"true"`
 	BootstrapPeers           []string
+	AutoRelayPeers           []string
 	EnableDht                bool `default:"false"`
 	DhtClient                bool `default:"false"`
 	DhtServer                bool `default:"false"`
@@ -69,6 +71,11 @@ func getConfig(a *arguments) server.Config {
 	}
 	c.Bootstrap.Peers = MustGetMultiaddrs(a.BootstrapPeers)
 	c.Bootstrap.UseDefaultPeers = !a.NoDefaultBootStrapPeers
+	autoRelayPeers, err := peer.AddrInfosFromP2pAddrs(MustGetMultiaddrs(a.AutoRelayPeers)...)
+	if err != nil {
+		log.Fatalw("Unable to get auto relay peers", "autoRelayPeers", a.AutoRelayPeers, "error", err)
+	}
+	c.Relay.Auto.Peers = autoRelayPeers
 
 	if a.ID != "" {
 		c.ID = a.ID
@@ -93,7 +100,7 @@ func getConfig(a *arguments) server.Config {
 	c.Relay.Discovery = a.RelayDiscovery
 	c.Relay.HopLimit = a.RelayHopLimit
 
-	c.Relay.Auto = a.AutoRelay
+	c.Relay.Auto.Enabled = a.AutoRelay
 	c.AutoNat = a.AutoNat
 
 	if len(a.BootstrapPeers) != 0 {

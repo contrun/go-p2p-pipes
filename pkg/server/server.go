@@ -198,6 +198,12 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 		go pprofHTTP(int(c.PProf.Port))
 	}
 
+	if len(c.Relay.Auto.Peers) > 0 {
+		c.Relay.Auto.Enabled = true
+		log.Infow("Auto relay peers", "peers", c.Relay.Auto.Peers)
+		opts = append(opts, libp2p.EnableAutoRelayWithStaticRelays(c.Relay.Auto.Peers))
+	}
+
 	opts = append(opts, extra_opts...)
 
 	d, err := daemon.NewDaemon(ctx, c.DHT.Mode, opts...)

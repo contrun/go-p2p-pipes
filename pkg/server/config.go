@@ -8,6 +8,7 @@ import (
 	"time"
 
 	"github.com/libp2p/go-libp2p-core/crypto"
+	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 )
 
@@ -70,8 +71,13 @@ type Relay struct {
 	Active    bool
 	Hop       bool
 	Discovery bool
-	Auto      bool
+	Auto      AutoRelay
 	HopLimit  int
+}
+
+type AutoRelay struct {
+	Enabled bool
+	Peers   []peer.AddrInfo
 }
 
 type DHT struct {
@@ -135,7 +141,7 @@ func (c *Config) Validate() error {
 	if c.DHT.Mode != DHTClientMode && c.DHT.Mode != DHTFullMode && c.DHT.Mode != DHTServerMode && c.DHT.Mode != "" {
 		return fmt.Errorf("unknown DHT mode %s", c.DHT)
 	}
-	if c.Relay.Auto && (!c.Relay.Enabled || c.DHT.Mode == "") {
+	if c.Relay.Auto.Enabled && (!c.Relay.Enabled || c.DHT.Mode == "") {
 		return fmt.Errorf("can't have autorelay enabled without Relay enabled and DHT enabled")
 	}
 	return nil
@@ -177,8 +183,11 @@ func NewDefaultConfig() Config {
 			Enabled:   true,
 			Hop:       false,
 			Discovery: false,
-			Auto:      false,
-			HopLimit:  0,
+			Auto: AutoRelay{
+				Enabled: false,
+				Peers:   make([]peer.AddrInfo, 0),
+			},
+			HopLimit: 0,
 		},
 		AutoNat:           false,
 		HostAddresses:     make(MaddrArray, 0),
