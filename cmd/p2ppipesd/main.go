@@ -30,8 +30,9 @@ type arguments struct {
 	RelayHop                 bool `default:"false"`
 	RelayHopLimit            int  `default:"0"`
 	RelayDiscovery           bool `default:"false"`
-	AutoRelay                bool `default:"false"`
-	AutoNat                  bool `default:"false"`
+	AutoRelay                bool `default:"true"`
+	AutoNat                  bool `default:"true"`
+	HolePunching             bool `default:"true"`
 	HostAddrs                []string
 	AnnounceAddrs            []string
 	MetricsAddr              string
@@ -102,6 +103,7 @@ func getConfig(a *arguments) server.Config {
 
 	c.Relay.Auto.Enabled = a.AutoRelay
 	c.AutoNat = a.AutoNat
+	c.HolePunching = a.HolePunching
 
 	if len(a.BootstrapPeers) != 0 {
 		c.Bootstrap.Peers = MustGetMultiaddrs(a.BootstrapPeers)

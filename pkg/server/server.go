@@ -48,6 +48,7 @@ func NewServer(ctx context.Context, c Config, done chan struct{}, extra_opts ...
 	s.Daemon = daemon
 	s.ctx = ctx
 	s.ListenNetwork, s.ListenAddr = parse_address(c.ListenAddr)
+	log.Infow("Listening grpc on", "network", s.ListenNetwork, "address", s.ListenAddr)
 	l, err := net.Listen(s.ListenNetwork, s.ListenAddr)
 	if err != nil {
 		daemon.Close()
@@ -170,6 +171,10 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 
 	if c.AutoNat {
 		opts = append(opts, libp2p.EnableNATService())
+	}
+
+	if c.HolePunching {
+		opts = append(opts, libp2p.EnableHolePunching())
 	}
 
 	if c.NoListen {

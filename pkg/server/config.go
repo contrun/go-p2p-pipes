@@ -110,6 +110,7 @@ type Config struct {
 	PubSub            PubSub
 	Relay             Relay
 	AutoNat           bool
+	HolePunching      bool
 	HostAddresses     MaddrArray
 	AnnounceAddresses MaddrArray
 	NoListen          bool
@@ -189,7 +190,8 @@ func NewDefaultConfig() Config {
 			},
 			HopLimit: 0,
 		},
-		AutoNat:           false,
+		AutoNat:           true,
+		HolePunching:      true,
 		HostAddresses:     make(MaddrArray, 0),
 		AnnounceAddresses: make(MaddrArray, 0),
 		NoListen:          false,
