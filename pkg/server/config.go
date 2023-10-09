@@ -81,7 +81,8 @@ type AutoRelay struct {
 }
 
 type DHT struct {
-	Mode string
+	Mode                       string
+	BroadcastIntervalInSeconds uint
 }
 
 type PProf struct {
@@ -140,7 +141,7 @@ func (c *Config) UnmarshalJSON(b []byte) error {
 
 func (c *Config) Validate() error {
 	if c.DHT.Mode != DHTClientMode && c.DHT.Mode != DHTFullMode && c.DHT.Mode != DHTServerMode && c.DHT.Mode != "" {
-		return fmt.Errorf("unknown DHT mode %s", c.DHT)
+		return fmt.Errorf("unknown DHT mode %s", c.DHT.Mode)
 	}
 	if c.Relay.Auto.Enabled && (!c.Relay.Enabled || c.DHT.Mode == "") {
 		return fmt.Errorf("can't have autorelay enabled without Relay enabled and DHT enabled")
@@ -160,7 +161,8 @@ func NewDefaultConfig() Config {
 			UseDefaultPeers: true,
 		},
 		DHT: DHT{
-			Mode: "",
+			Mode:                       "",
+			BroadcastIntervalInSeconds: 600,
 		},
 		ConnectionManager: ConnectionManager{
 			Enabled:       false,

@@ -32,7 +32,7 @@ func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscover
 			return nil, status.Error(codes.InvalidArgument, "Argument rv dht not passed")
 		}
 
-		err := s.Daemon.BroadcastPeerInfoViaDHT(ctx, rv)
+		err := s.Daemon.AddDHTRendezvous(ctx, rv)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
@@ -40,11 +40,30 @@ func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscover
 		return &response, nil
 	}
 
-	return nil, UNIMPLEMENTED_ERROR
+	return nil, status.Error(codes.InvalidArgument, "Unsupported method")
 }
 
 func (s *Server) StopDiscoveringPeers(ctx context.Context, in *pb.StopDiscoveringPeersRequest) (*pb.StopDiscoveringPeersResponse, error) {
-	return nil, UNIMPLEMENTED_ERROR
+	var response pb.StopDiscoveringPeersResponse
+	if in.Method == pb.PeerDiscoveryMethod_DHT {
+		dht := in.GetDht()
+		if dht == nil {
+			return nil, status.Error(codes.InvalidArgument, "Argument dht not passed")
+		}
+		rv := dht.GetRv()
+		if rv == "" {
+			return nil, status.Error(codes.InvalidArgument, "Argument rv dht not passed")
+		}
+
+		err := s.Daemon.DeleteDHTRendezvous(ctx, rv)
+		if err != nil {
+			return nil, status.Error(codes.Internal, err.Error())
+		}
+
+		return &response, nil
+	}
+
+	return nil, status.Error(codes.InvalidArgument, "Unsupported method")
 }
 
 func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.ListPeersResponse, error) {

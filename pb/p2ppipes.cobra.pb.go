@@ -115,6 +115,11 @@ func _P2PPipeStopDiscoveringPeersCommand(cfg *client.Config) *cobra.Command {
 	}
 
 	flag.EnumVar(cmd.PersistentFlags(), &req.Method, cfg.FlagNamer("Method"), "")
+	_Dht := &DHTDiscoveryArguments{}
+	cmd.PersistentFlags().Bool(cfg.FlagNamer("Dht"), false, "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Dht"), func() { req.Arguments = &StopDiscoveringPeersRequest_Dht{Dht: _Dht} })
+	cmd.PersistentFlags().StringVar(&_Dht.Rv, cfg.FlagNamer("Dht Rv"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Dht Rv"), func() { req.Arguments = &StopDiscoveringPeersRequest_Dht{Dht: _Dht} })
 
 	return cmd
 }

@@ -9,6 +9,7 @@ import (
 	"os/signal"
 	"strings"
 	"syscall"
+	"time"
 
 	"github.com/contrun/go-p2p-pipes/pb"
 	"github.com/contrun/go-p2p-pipes/pkg/daemon"
@@ -211,7 +212,11 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 
 	opts = append(opts, extra_opts...)
 
-	d, err := daemon.NewDaemon(ctx, c.DHT.Mode, opts...)
+	daemonConfig := daemon.DaemonConfig{
+		DHTMode:              c.DHT.Mode,
+		DHTBroadcastInterval: time.Duration(c.DHT.BroadcastIntervalInSeconds) * time.Second,
+	}
+	d, err := daemon.NewDaemon(ctx, daemonConfig, opts...)
 	if err != nil {
 		return nil, err
 	}

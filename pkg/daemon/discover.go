@@ -2,7 +2,9 @@ package daemon
 
 import (
 	"context"
+	"time"
 
+	multierror "github.com/hashicorp/go-multierror"
 	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multihash"
@@ -22,7 +24,61 @@ func (d *Daemon) getRendezvousCid(where string) cid.Cid {
 	return id
 }
 
-func (d *Daemon) BroadcastPeerInfoViaDHT(ctx context.Context, rv string) error {
+func (d *Daemon) broadcastDHTRendezvousWorker(interval time.Duration) {
+	if d.DHT() == nil {
+		return
+	}
+
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-ticker.C:
+			d.BroadcastPeerInfo(d.ctx)
+		case <-d.ctx.Done():
+			return
+		}
+	}
+}
+
+func (d *Daemon) AddDHTRendezvous(ctx context.Context, rv string) error {
+	d.dhtMx.Lock()
+	defer d.dhtMx.Unlock()
+	if d.DHT() == nil {
+		return ERROR_NO_DHT
+	}
+	d.dhtRendezvous[rv] = true
+	return d.broadcastPeerInfoViaDHT(ctx, rv)
+}
+
+// TODO: provider information of other peers may be obsolete, do we have any way
+// to proactively evict us from the provider list?
+func (d *Daemon) DeleteDHTRendezvous(ctx context.Context, rv string) error {
+	d.dhtMx.Lock()
+	defer d.dhtMx.Unlock()
+	if d.DHT() == nil {
+		return ERROR_NO_DHT
+	}
+	delete(d.dhtRendezvous, rv)
+	return nil
+}
+
+func (d *Daemon) BroadcastPeerInfo(ctx context.Context) error {
+	d.dhtMx.RLock()
+	rvs := d.dhtRendezvous
+	d.dhtMx.RUnlock()
+
+	var merr *multierror.Error
+	for rv := range rvs {
+		if err := d.broadcastPeerInfoViaDHT(d.ctx, rv); err != nil {
+			merr = multierror.Append(err)
+		}
+	}
+	return merr.ErrorOrNil()
+}
+
+func (d *Daemon) broadcastPeerInfoViaDHT(ctx context.Context, rv string) error {
 	dht := d.DHT()
 	if dht == nil {
 		return ERROR_NO_DHT

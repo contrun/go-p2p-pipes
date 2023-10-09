@@ -5,23 +5,26 @@ option go_package = "github.com/contrun/go-p2p-pipes/p2ppipes/pb";
 package p2ppipes;
 
 service P2PPipe {
-  rpc StartDiscoveringPeers (StartDiscoveringPeersRequest) returns (StartDiscoveringPeersResponse) {}
-  rpc StopDiscoveringPeers (StopDiscoveringPeersRequest) returns (StopDiscoveringPeersResponse) {}
-  rpc ListPeers (ListPeersRequest) returns (ListPeersResponse) {}
-  rpc ListDiscoveredPeers (ListDiscoveredPeersRequest) returns (ListDiscoveredPeersResponse) {}
-  rpc StartForwardingIO (StartForwardingIORequest) returns (StartForwardingIOResponse) {}
-  rpc StopForwardingIO (StopForwardingIORequest) returns (StopForwardingIOResponse) {}
+  rpc StartDiscoveringPeers(StartDiscoveringPeersRequest)
+      returns (StartDiscoveringPeersResponse) {}
+  rpc StopDiscoveringPeers(StopDiscoveringPeersRequest)
+      returns (StopDiscoveringPeersResponse) {}
+  rpc ListPeers(ListPeersRequest) returns (ListPeersResponse) {}
+  rpc ListDiscoveredPeers(ListDiscoveredPeersRequest)
+      returns (ListDiscoveredPeersResponse) {}
+  rpc StartForwardingIO(StartForwardingIORequest)
+      returns (StartForwardingIOResponse) {}
+  rpc StopForwardingIO(StopForwardingIORequest)
+      returns (StopForwardingIOResponse) {}
 }
 
 enum PeerDiscoveryMethod {
-  PEERDISCOVERYMETHODUNDEFINED    = 0;
+  PEERDISCOVERYMETHODUNDEFINED = 0;
   DHT = 1;
   MDNS = 2;
-} 
-
-message DHTDiscoveryArguments {
-  string rv = 1;
 }
+
+message DHTDiscoveryArguments { string rv = 1; }
 
 message MDNSDiscoveryArguments {}
 
@@ -37,12 +40,16 @@ message StartDiscoveringPeersResponse {}
 
 message StopDiscoveringPeersRequest {
   PeerDiscoveryMethod method = 1;
+  oneof arguments {
+    DHTDiscoveryArguments dht = 2;
+    MDNSDiscoveryArguments mdns = 3;
+  }
 }
 
 message StopDiscoveringPeersResponse {}
 
 enum PeerType {
-  PEERTYPEUNDEFIEND    = 0;
+  PEERTYPEUNDEFIEND = 0;
   ALL = 1;
   CONNECTED = 2;
   DISCOVERED = 3;
@@ -53,13 +60,9 @@ message Peer {
   repeated string addresses = 2;
 }
 
-message ListPeersRequest {
-  PeerType peer_type = 1;
-}
+message ListPeersRequest { PeerType peer_type = 1; }
 
-message ListPeersResponse {
-  repeated Peer peers = 1;
-}
+message ListPeersResponse { repeated Peer peers = 1; }
 
 message ListDiscoveredPeersRequest {
   PeerDiscoveryMethod method = 1;
@@ -69,12 +72,10 @@ message ListDiscoveredPeersRequest {
   }
 }
 
-message ListDiscoveredPeersResponse {
-  repeated Peer peers = 1;
-}
+message ListDiscoveredPeersResponse { repeated Peer peers = 1; }
 
 enum IOType {
-  IOTYPEUNDEFINED  = 0;
+  IOTYPEUNDEFINED = 0;
   NULL = 1; // Output will be ignored, while input will be null.
   TCP = 2;
   UDP = 3;
@@ -101,8 +102,6 @@ message StartForwardingIORequest {
 
 message StartForwardingIOResponse {}
 
-message StopForwardingIORequest {
-  IO local_io = 1;
-}
+message StopForwardingIORequest { IO local_io = 1; }
 
 message StopForwardingIOResponse {}

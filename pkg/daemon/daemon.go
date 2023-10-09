@@ -4,6 +4,7 @@ import (
 	"context"
 	"fmt"
 	"sync"
+	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-daemon/config"
@@ -33,14 +34,19 @@ type Daemon struct {
 	ctx       context.Context
 	listener  manet.Listener
 
-	dht    *dht.IpfsDHT
+	dht           *dht.IpfsDHT
+	dhtMx         sync.RWMutex
+	dhtRendezvous map[string]bool
+
 	pubsub *ps.PubSub
 
-	mx sync.Mutex
 	// stream handlers: map of protocol.ID to multi-address
 	handlers map[protocol.ID]ma.Multiaddr
-	// closed is set when the daemon is shutting down
-	closed bool
+}
+
+type DaemonConfig struct {
+	DHTMode              string
+	DHTBroadcastInterval time.Duration
 }
 
 func (d *Daemon) DHTRoutingFactory(opts []dhtopts.Option) func(host.Host) (routing.PeerRouting, error) {
@@ -145,17 +151,18 @@ func (d *Daemon) Close() error {
 	return d.Host.Close()
 }
 
-func NewDaemon(ctx context.Context, dhtMode string, opts ...libp2p.Option) (*Daemon, error) {
+func NewDaemon(ctx context.Context, daemonConfig DaemonConfig, opts ...libp2p.Option) (*Daemon, error) {
 	d := &Daemon{
-		ctx:      ctx,
-		handlers: make(map[protocol.ID]ma.Multiaddr),
+		ctx:           ctx,
+		handlers:      make(map[protocol.ID]ma.Multiaddr),
+		dhtRendezvous: make(map[string]bool),
 	}
 
-	if dhtMode != "" {
+	if daemonConfig.DHTMode != "" {
 		var dhtOpts []dhtopts.Option
-		if dhtMode == config.DHTClientMode {
+		if daemonConfig.DHTMode == config.DHTClientMode {
 			dhtOpts = append(dhtOpts, dht.Mode(dht.ModeClient))
-		} else if dhtMode == config.DHTServerMode {
+		} else if daemonConfig.DHTMode == config.DHTServerMode {
 			dhtOpts = append(dhtOpts, dht.Mode(dht.ModeServer))
 		}
 
@@ -169,5 +176,6 @@ func NewDaemon(ctx context.Context, dhtMode string, opts ...libp2p.Option) (*Dae
 	d.Host = h
 
 	d.RegisterForwardingService()
+	go d.broadcastDHTRendezvousWorker(daemonConfig.DHTBroadcastInterval)
 	return d, nil
 }
