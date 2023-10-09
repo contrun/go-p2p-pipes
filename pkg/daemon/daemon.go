@@ -142,14 +142,6 @@ func (d *Daemon) DumpInfo() {
 }
 
 func (d *Daemon) Close() error {
-	d.mx.Lock()
-	if d.closed {
-		d.mx.Unlock()
-		return nil
-	}
-	d.closed = true
-	defer d.mx.Unlock()
-
 	return d.Host.Close()
 }
 
