@@ -71,15 +71,19 @@ func (s *Server) StopDiscoveringPeers(ctx context.Context, in *pb.StopDiscoverin
 func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.ListPeersResponse, error) {
 	var response pb.ListPeersResponse
 	switch in.GetPeerType() {
-	case pb.PeerType_ALL, pb.PeerType_PEERTYPEUNDEFIEND:
-		ps := s.Daemon.Network().Peerstore()
+	case pb.PeerType_PEERTYPEUNDEFIEND, pb.PeerType_ALL, pb.PeerType_CONNECTED:
+		n := s.Daemon.Network()
+		ps := n.Peerstore()
 		peers := ps.Peers()
 		peerinfos := make([]peer.AddrInfo, len(peers))
 		for _, p := range peers {
 			addrinfo := ps.PeerInfo(p)
+			if in.GetPeerType() == pb.PeerType_CONNECTED && n.Connectedness(p) != network.Connected {
+				continue
+			}
 			peerinfos = append(peerinfos, addrinfo)
 		}
-		response.Peers = addrInfosToPBPeers(s.Daemon.Network(), peerinfos)
+		response.Peers = addrInfosToPBPeers(n, peerinfos)
 		return &response, nil
 	default:
 		return nil, UNIMPLEMENTED_ERROR
