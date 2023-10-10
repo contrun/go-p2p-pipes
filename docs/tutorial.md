@@ -51,16 +51,9 @@ there is a chance that these two nodes have learned each other once they bootstr
 If this is not the case, we need to make they find each other by providing the same rendezvous point, and
 finds out all the peers providing this rendezvous point.
 
-TODO: improve the program p2ppipesc, and get ride of grpcurl or evans below.
-
-Calling gRPC services with the following commands (we use [grpcurl](https://github.com/fullstorydev/grpcurl) to call gRPC methods) to start discover.
-
 ```
-grpcurl -plaintext -proto ./pb/p2ppipes.proto -format json -d '{"method": "DHT", "dht": {"rv": "abc"}}' localhost:6780 p2ppipes.P2PPipe.StartDiscoveringPeers
-```
-
-```
-grpcurl -plaintext -proto ./pb/p2ppipes.proto -format json -d '{"method": "DHT", "dht": {"rv": "abc"}}' localhost:6789 p2ppipes.P2PPipe.StartDiscoveringPeers
+p2ppipesc -s 127.0.0.1:6780 start-discovering-peers --dht-rv abc
+p2ppipesc -s 127.0.0.1:6789 start-discovering-peers --dht-rv abc
 ```
 
 Here the parameter `"abc"` is the rendezvous point with which different peers can discover each other. We should 
@@ -71,7 +64,7 @@ use a different rendezvous point for different networks.
 After peers has broadcasted their identity to the network, we can run
 
 ```
-grpcurl -plaintext -proto ./pb/p2ppipes.proto -format json -d '{"method": "DHT", "dht": {"rv": "abc"}}' localhost:6780 p2ppipes.P2PPipe.ListDiscoveredPeers
+p2ppipesc -s 127.0.0.1:6780 list-discovered-peers --dht-rv abc
 ```
 
 to obtain a list of all the peers that has the same rendezvous point.
@@ -118,7 +111,7 @@ while the panel on the right side shows it worked.
 
 ![screenshot](./assets/Screenshot_2023-09-12_022009.png)
 
-The equivalent grpcurl command is
+The equivalent p2ppipesc command is
 ```
-grpcurl -plaintext -proto ./pb/p2ppipes.proto -format json -d '{"peer":{"id":"QmPDYG4dczwyNTo7SgDiAxM1bRV2wy9FfKaMLhpeexoxNp"},"remote_io":{"io_type":2,"tcp":"127.0.0.1:22"},"local_io":{"io_type":2,"tcp":"127.0.0.1:5566"}}' localhost:6789 p2ppipes.P2PPipe.StartForwardingIO
+p2ppipesc -s 127.0.0.1:6789 start-forwarding-io --peer-id QmPDYG4dczwyNTo7SgDiAxM1bRV2wy9FfKaMLhpeexoxNp --remote-tcp 127.0.0.1:22 --local-tcp 127.0.0.1:5566
 ```
