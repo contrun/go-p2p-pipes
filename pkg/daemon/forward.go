@@ -19,7 +19,7 @@ import (
 )
 
 var ForwardingControlProtocolID = protocol.ID("/gop2ppipes/forward/control/0.1.0")
-var ForwardingDataProtocolID = protocol.ID("/gop2ppipes/forward//data/0.1.0")
+var ForwardingDataProtocolID = protocol.ID("/gop2ppipes/forward/data/0.1.0")
 
 type SetupForwardingRequest struct {
 	// TODO: we should obtain the peer id from rpc the request connection
