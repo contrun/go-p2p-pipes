@@ -4,7 +4,6 @@ import (
 	"context"
 	"fmt"
 	"sync"
-	"time"
 
 	"github.com/libp2p/go-libp2p"
 	"github.com/libp2p/go-libp2p-daemon/config"
@@ -19,6 +18,7 @@ import (
 	ma "github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 
+	"github.com/cenkalti/backoff/v4"
 	logging "github.com/ipfs/go-log"
 
 	_ "net/http/pprof"
@@ -45,8 +45,8 @@ type Daemon struct {
 }
 
 type DaemonConfig struct {
-	DHTMode              string
-	DHTBroadcastInterval time.Duration
+	DHTMode            string
+	DHTBroadcastTicker *backoff.Ticker
 }
 
 func (d *Daemon) DHTRoutingFactory(opts []dhtopts.Option) func(host.Host) (routing.PeerRouting, error) {
@@ -176,6 +176,6 @@ func NewDaemon(ctx context.Context, daemonConfig DaemonConfig, opts ...libp2p.Op
 	d.Host = h
 
 	d.RegisterForwardingService()
-	go d.broadcastDHTRendezvousWorker(daemonConfig.DHTBroadcastInterval)
+	go d.broadcastDHTRendezvousWorker(daemonConfig.DHTBroadcastTicker)
 	return d, nil
 }

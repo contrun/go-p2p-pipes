@@ -4,38 +4,28 @@ import (
 	"context"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	multierror "github.com/hashicorp/go-multierror"
-	"github.com/ipfs/go-cid"
 	"github.com/libp2p/go-libp2p/core/peer"
-	"github.com/multiformats/go-multihash"
+	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 )
 
-const defaultProviderCount = 20
-
-func (d *Daemon) getRendezvousCid(where string) cid.Cid {
-	rdv := []byte(where)
-	rdv = append(rdv, []byte(":gop2ppipes"+d.namespace)...)
-	hash, err := multihash.Sum(rdv, multihash.SHA2_256, -1)
-	if err != nil {
-		panic(err)
-	}
-	id := cid.NewCidV1(cid.Raw, hash)
-	log.Debugw("Rendezvous point", "id", id)
-	return id
+func (d *Daemon) getRendezvousPoint(where string) string {
+	return "gop2ppipes:" + d.namespace + ":" + where
 }
 
-func (d *Daemon) broadcastDHTRendezvousWorker(interval time.Duration) {
+func (d *Daemon) broadcastDHTRendezvousWorker(ticker *backoff.Ticker) {
 	if d.DHT() == nil {
 		return
 	}
 
-	ticker := time.NewTicker(interval)
 	defer ticker.Stop()
 
 	for {
 		select {
 		case <-ticker.C:
-			d.BroadcastPeerInfo(d.ctx)
+			err := d.BroadcastPeerInfoViaDHT(d.ctx)
+			log.Errorw("Broadcast peer info failed", "error", err)
 		case <-d.ctx.Done():
 			return
 		}
@@ -49,7 +39,7 @@ func (d *Daemon) AddDHTRendezvous(ctx context.Context, rv string) error {
 		return ERROR_NO_DHT
 	}
 	d.dhtRendezvous[rv] = true
-	return d.broadcastPeerInfoViaDHT(ctx, rv)
+	return d.AdvertiseViaDHT(ctx, rv)
 }
 
 // TODO: provider information of other peers may be obsolete, do we have any way
@@ -64,43 +54,53 @@ func (d *Daemon) DeleteDHTRendezvous(ctx context.Context, rv string) error {
 	return nil
 }
 
-func (d *Daemon) BroadcastPeerInfo(ctx context.Context) error {
+func (d *Daemon) BroadcastPeerInfoViaDHT(ctx context.Context) error {
 	d.dhtMx.RLock()
 	rvs := d.dhtRendezvous
 	d.dhtMx.RUnlock()
 
 	var merr *multierror.Error
 	for rv := range rvs {
-		if err := d.broadcastPeerInfoViaDHT(d.ctx, rv); err != nil {
+		if err := d.AdvertiseViaDHT(d.ctx, rv); err != nil {
 			merr = multierror.Append(err)
 		}
 	}
 	return merr.ErrorOrNil()
 }
 
-func (d *Daemon) broadcastPeerInfoViaDHT(ctx context.Context, rv string) error {
+func (d *Daemon) advertiseViaDHT(ctx context.Context, rv string) (duration time.Duration, err error) {
 	dht := d.DHT()
 	if dht == nil {
-		return ERROR_NO_DHT
+		return duration, ERROR_NO_DHT
 	}
-	cid := d.getRendezvousCid(rv)
-	log.Infow("Broadcasting peer info via dht", "dht", d.DHT(), "rendezvous", rv, "cid", cid)
-	err := d.DHT().Provide(ctx, cid, true)
+	log.Infow("Advertising via dht", "dht", d.DHT(), "rendezvous", rv)
+	routingDiscovery := routing.NewRoutingDiscovery(dht)
+	return routingDiscovery.Advertise(ctx, rv)
+}
+
+func (d *Daemon) AdvertiseViaDHT(ctx context.Context, rv string) error {
+	ttl, err := d.advertiseViaDHT(ctx, d.getRendezvousPoint(rv))
 	if err != nil {
-		log.Warnw("DHT error while providing", "rendezvous", rv, "cid", cid, "error", err)
+		log.Warnw("DHT error while providing", "rendezvous", rv, "error", err)
 		return err
 	}
+	log.Debugw("DHT Advertising successfully", "rendezvous", rv, "ttl", ttl)
 	return nil
 }
 
-func (d *Daemon) FindPeersViaDHT(ctx context.Context, rv string, count int) (<-chan peer.AddrInfo, error) {
+func (d *Daemon) findPeersViaDHT(ctx context.Context, rv string) (<-chan peer.AddrInfo, error) {
 	dht := d.DHT()
 	if dht == nil {
 		return nil, ERROR_NO_DHT
 	}
-	cid := d.getRendezvousCid(rv)
-	log.Infow("Finding peers via dht", "dht", d.DHT(), "rendezvous", rv, "cid", cid)
-	return d.DHT().FindProvidersAsync(ctx, cid, defaultProviderCount), nil
+	log.Infow("Finding peers via dht", "dht", d.DHT(), "rendezvous", rv)
+	routingDiscovery := routing.NewRoutingDiscovery(dht)
+	return routingDiscovery.FindPeers(ctx, rv)
+}
+
+func (d *Daemon) FindPeersViaDHT(ctx context.Context, rv string, count int) (<-chan peer.AddrInfo, error) {
+	log.Infow("Finding peers via dht", "dht", d.DHT(), "rendezvous", rv)
+	return d.findPeersViaDHT(ctx, d.getRendezvousPoint(rv))
 }
 
 func (d *Daemon) FindPeersViaDHTSync(ctx context.Context, rv string, count int) ([]peer.AddrInfo, error) {

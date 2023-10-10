@@ -81,8 +81,7 @@ type AutoRelay struct {
 }
 
 type DHT struct {
-	Mode                       string
-	BroadcastIntervalInSeconds uint
+	Mode string
 }
 
 type PProf struct {
@@ -161,8 +160,7 @@ func NewDefaultConfig() Config {
 			UseDefaultPeers: true,
 		},
 		DHT: DHT{
-			Mode:                       "",
-			BroadcastIntervalInSeconds: 600,
+			Mode: "",
 		},
 		ConnectionManager: ConnectionManager{
 			Enabled:       false,

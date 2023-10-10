@@ -11,6 +11,7 @@ import (
 	"syscall"
 	"time"
 
+	"github.com/cenkalti/backoff/v4"
 	"github.com/contrun/go-p2p-pipes/pb"
 	"github.com/contrun/go-p2p-pipes/pkg/daemon"
 	multierror "github.com/hashicorp/go-multierror"
@@ -212,9 +213,18 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 
 	opts = append(opts, extra_opts...)
 
+	ticker := backoff.NewTicker(&backoff.ExponentialBackOff{
+		InitialInterval:     5 * time.Second,
+		RandomizationFactor: 0.5,
+		Multiplier:          2,
+		MaxInterval:         60 * time.Minute,
+		MaxElapsedTime:      0,
+		Stop:                backoff.Stop,
+		Clock:               backoff.SystemClock,
+	})
 	daemonConfig := daemon.DaemonConfig{
-		DHTMode:              c.DHT.Mode,
-		DHTBroadcastInterval: time.Duration(c.DHT.BroadcastIntervalInSeconds) * time.Second,
+		DHTMode:            c.DHT.Mode,
+		DHTBroadcastTicker: ticker,
 	}
 	d, err := daemon.NewDaemon(ctx, daemonConfig, opts...)
 	if err != nil {

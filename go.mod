@@ -5,6 +5,7 @@ go 1.20
 require (
 	github.com/NathanBaulch/protoc-gen-cobra v1.2.1
 	github.com/alexflint/go-arg v1.4.3
+	github.com/cenkalti/backoff/v4 v4.2.1
 	github.com/hashicorp/go-multierror v1.1.1
 	github.com/ipfs/go-cid v0.4.1
 	github.com/ipfs/go-log v1.0.5
