@@ -176,6 +176,6 @@ func NewDaemon(ctx context.Context, daemonConfig DaemonConfig, opts ...libp2p.Op
 	d.Host = h
 
 	d.RegisterForwardingService()
-	go d.broadcastDHTRendezvousWorker(daemonConfig.DHTBroadcastTicker)
+	go d.dhtBackgroundWorker(daemonConfig.DHTBroadcastTicker)
 	return d, nil
 }

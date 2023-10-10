@@ -2,10 +2,12 @@ package daemon
 
 import (
 	"context"
+	"sync"
 	"time"
 
 	"github.com/cenkalti/backoff/v4"
 	multierror "github.com/hashicorp/go-multierror"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/libp2p/go-libp2p/p2p/discovery/routing"
 )
@@ -14,7 +16,47 @@ func (d *Daemon) getRendezvousPoint(where string) string {
 	return "gop2ppipes:" + d.namespace + ":" + where
 }
 
-func (d *Daemon) broadcastDHTRendezvousWorker(ticker *backoff.Ticker) {
+func (d *Daemon) dhtMaintenance(ctx context.Context) error {
+	log.Debug("Doing DHT maintenance")
+
+	var merr *multierror.Error
+
+	err := d.AdvertiseAllViaDHT(ctx)
+	if err != nil {
+		log.Warnw("Advertising via DHT error", "error", err)
+		merr = multierror.Append(merr, err)
+	}
+
+	peers, err := d.FindPeersAllViaDHT(ctx)
+	if err != nil {
+		log.Warnw("Finding peers via DHT error", "error", err)
+		merr = multierror.Append(merr, err)
+	}
+
+	for p := range peers {
+		log.Debugw("Found peer via DHT", "peer", p)
+		// Don't dial ourselves or peers without address
+		if p.ID == d.ID() || len(p.Addrs) == 0 {
+			continue
+		}
+
+		if d.Network().Connectedness(p.ID) != network.Connected {
+			log.Debugw("Found new peer", "peer", p)
+			if err := d.Connect(ctx, p); err != nil {
+				log.Debugw("Connecting to peer failed", "peer", p, "error", err)
+				merr = multierror.Append(merr, err)
+			} else {
+				log.Debugw("Connected to peer", "peer", p)
+			}
+		} else {
+			log.Debugw("Found an already connected peer", "peer", p)
+		}
+	}
+
+	return merr.ErrorOrNil()
+}
+
+func (d *Daemon) dhtBackgroundWorker(ticker *backoff.Ticker) {
 	if d.DHT() == nil {
 		return
 	}
@@ -24,8 +66,10 @@ func (d *Daemon) broadcastDHTRendezvousWorker(ticker *backoff.Ticker) {
 	for {
 		select {
 		case <-ticker.C:
-			err := d.BroadcastPeerInfoViaDHT(d.ctx)
-			log.Errorw("Broadcast peer info failed", "error", err)
+			err := d.dhtMaintenance(d.ctx)
+			if err != nil {
+				log.Warnw("Error while doing dht maintenance", "error", err)
+			}
 		case <-d.ctx.Done():
 			return
 		}
@@ -54,13 +98,20 @@ func (d *Daemon) DeleteDHTRendezvous(ctx context.Context, rv string) error {
 	return nil
 }
 
-func (d *Daemon) BroadcastPeerInfoViaDHT(ctx context.Context) error {
+func (d *Daemon) GetCurrentDHTRendezvous() []string {
 	d.dhtMx.RLock()
-	rvs := d.dhtRendezvous
-	d.dhtMx.RUnlock()
+	defer d.dhtMx.RUnlock()
+	rvs := make([]string, len(d.dhtRendezvous))
+	for rv := range d.dhtRendezvous {
+		rvs = append(rvs, rv)
+	}
+	return rvs
+}
 
+func (d *Daemon) AdvertiseAllViaDHT(ctx context.Context) error {
 	var merr *multierror.Error
-	for rv := range rvs {
+	var rvs = d.GetCurrentDHTRendezvous()
+	for _, rv := range rvs {
 		if err := d.AdvertiseViaDHT(d.ctx, rv); err != nil {
 			merr = multierror.Append(err)
 		}
@@ -98,17 +149,46 @@ func (d *Daemon) findPeersViaDHT(ctx context.Context, rv string) (<-chan peer.Ad
 	return routingDiscovery.FindPeers(ctx, rv)
 }
 
-func (d *Daemon) FindPeersViaDHT(ctx context.Context, rv string, count int) (<-chan peer.AddrInfo, error) {
+// This function may return both an error and a non-empty channel
+func (d *Daemon) FindPeersAllViaDHT(ctx context.Context) (<-chan peer.AddrInfo, error) {
+	var merr *multierror.Error
+	var rvs = d.GetCurrentDHTRendezvous()
+	var ps = make(chan peer.AddrInfo, 100)
+	var wg sync.WaitGroup
+
+	for _, rv := range rvs {
+		if peers, err := d.FindPeersViaDHT(d.ctx, rv); err != nil {
+			merr = multierror.Append(err)
+		} else {
+			wg.Add(1)
+			// Avoid blocking when the receiver of the channel is not ready
+			go func() {
+				for p := range peers {
+					ps <- p
+				}
+				wg.Done()
+			}()
+		}
+	}
+
+	go func() {
+		wg.Wait()
+		close(ps)
+	}()
+	return ps, merr.ErrorOrNil()
+}
+
+func (d *Daemon) FindPeersViaDHT(ctx context.Context, rv string) (<-chan peer.AddrInfo, error) {
 	log.Infow("Finding peers via dht", "dht", d.DHT(), "rendezvous", rv)
 	return d.findPeersViaDHT(ctx, d.getRendezvousPoint(rv))
 }
 
-func (d *Daemon) FindPeersViaDHTSync(ctx context.Context, rv string, count int) ([]peer.AddrInfo, error) {
-	peersCh, err := d.FindPeersViaDHT(ctx, rv, count)
+func (d *Daemon) FindPeersViaDHTSync(ctx context.Context, rv string) ([]peer.AddrInfo, error) {
+	peersCh, err := d.FindPeersViaDHT(ctx, rv)
 	if err != nil {
 		return nil, err
 	}
-	peers := make([]peer.AddrInfo, 0)
+	peers := make([]peer.AddrInfo, 20)
 	for peer := range peersCh {
 		peers = append(peers, peer)
 	}

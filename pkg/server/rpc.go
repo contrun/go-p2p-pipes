@@ -83,7 +83,7 @@ func (s *Server) ListDiscoveredPeers(ctx context.Context, in *pb.ListDiscoveredP
 			return nil, status.Error(codes.InvalidArgument, "Argument rv dht not passed")
 		}
 
-		peers, err := s.Daemon.FindPeersViaDHTSync(ctx, rv, 0)
+		peers, err := s.Daemon.FindPeersViaDHTSync(ctx, rv)
 		if err != nil {
 			return nil, status.Error(codes.Internal, err.Error())
 		}
