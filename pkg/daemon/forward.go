@@ -104,7 +104,8 @@ func (d *Daemon) RegisterForwardingService() error {
 			s.Reset()
 			return
 		}
-		addr, err := d.GetRemoteAddrFromAuthorizationCookie(cookie)
+		id := s.Conn().RemotePeer()
+		addr, err := d.GetRemoteAddrFromAuthorizationCookie(id, cookie)
 		if err != nil {
 			s.Reset()
 			log.Debugw("Resetted unauthorized stream", "id", s.ID(), "error", err)
@@ -131,11 +132,14 @@ func (d *Daemon) GetAuthorizationCookie(peer peer.ID, addr multiaddr.Multiaddr) 
 	return peer.String() + "/" + addr.String(), nil
 }
 
-func (d *Daemon) GetRemoteAddrFromAuthorizationCookie(cookie string) (multiaddr.Multiaddr, error) {
+func (d *Daemon) GetRemoteAddrFromAuthorizationCookie(peer peer.ID, cookie string) (multiaddr.Multiaddr, error) {
 	var ma multiaddr.Multiaddr
 	addr := strings.SplitN(cookie, "/", 2)
 	if len(addr) != 2 {
 		return ma, errors.New("Invalid cookie")
+	}
+	if addr[0] != peer.String() {
+		return ma, errors.New("Invalid peer")
 	}
 	return multiaddr.NewMultiaddr(addr[1])
 }

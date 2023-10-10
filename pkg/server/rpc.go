@@ -191,7 +191,7 @@ func (s *Server) StartForwardingIO(ctx context.Context, in *pb.StartForwardingIO
 		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid peer id %s", in.Peer.GetId()))
 	}
 	if addrs := in.Peer.GetAddresses(); len(addrs) != 0 {
-		mas := make([]multiaddr.Multiaddr, len(addrs))
+		mas := make([]multiaddr.Multiaddr, 0)
 		for _, addr := range addrs {
 			ma, err := multiaddr.NewMultiaddr(addr)
 			if err != nil {
