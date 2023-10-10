@@ -67,7 +67,6 @@ func _P2PPipeStartDiscoveringPeersCommand(cfg *client.Config) *cobra.Command {
 		},
 	}
 
-	flag.EnumVar(cmd.PersistentFlags(), &req.Method, cfg.FlagNamer("Method"), "")
 	_Dht := &DHTDiscoveryArguments{}
 	cmd.PersistentFlags().Bool(cfg.FlagNamer("Dht"), false, "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Dht"), func() { req.Arguments = &StartDiscoveringPeersRequest_Dht{Dht: _Dht} })
@@ -114,7 +113,6 @@ func _P2PPipeStopDiscoveringPeersCommand(cfg *client.Config) *cobra.Command {
 		},
 	}
 
-	flag.EnumVar(cmd.PersistentFlags(), &req.Method, cfg.FlagNamer("Method"), "")
 	_Dht := &DHTDiscoveryArguments{}
 	cmd.PersistentFlags().Bool(cfg.FlagNamer("Dht"), false, "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Dht"), func() { req.Arguments = &StopDiscoveringPeersRequest_Dht{Dht: _Dht} })
@@ -203,7 +201,6 @@ func _P2PPipeListDiscoveredPeersCommand(cfg *client.Config) *cobra.Command {
 		},
 	}
 
-	flag.EnumVar(cmd.PersistentFlags(), &req.Method, cfg.FlagNamer("Method"), "")
 	_Dht := &DHTDiscoveryArguments{}
 	cmd.PersistentFlags().Bool(cfg.FlagNamer("Dht"), false, "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Dht"), func() { req.Arguments = &ListDiscoveredPeersRequest_Dht{Dht: _Dht} })
@@ -250,39 +247,31 @@ func _P2PPipeStartForwardingIOCommand(cfg *client.Config) *cobra.Command {
 		},
 	}
 
-	_Peer := &Peer{}
+	_Peer := &PeerAddrInfo{}
 	cmd.PersistentFlags().StringVar(&_Peer.Id, cfg.FlagNamer("Peer Id"), "", "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Id"), func() { req.Peer = _Peer })
 	cmd.PersistentFlags().StringSliceVar(&_Peer.Addresses, cfg.FlagNamer("Peer Addresses"), nil, "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Addresses"), func() { req.Peer = _Peer })
-	cmd.PersistentFlags().StringVar(&_Peer.Connectedness, cfg.FlagNamer("Peer Connectedness"), "", "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Connectedness"), func() { req.Peer = _Peer })
-	flag.SliceVar(cmd.PersistentFlags(), flag.ParseMessageE[*Connection], &_Peer.Connections, cfg.FlagNamer("Peer Connections"), "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Connections"), func() { req.Peer = _Peer })
-	_RemoteIo := &IO{}
-	flag.EnumVar(cmd.PersistentFlags(), &_RemoteIo.IoType, cfg.FlagNamer("RemoteIo IoType"), "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("RemoteIo IoType"), func() { req.RemoteIo = _RemoteIo })
-	_RemoteIo_Tcp := &IO_Tcp{}
-	cmd.PersistentFlags().StringVar(&_RemoteIo_Tcp.Tcp, cfg.FlagNamer("RemoteIo Tcp"), "", "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("RemoteIo Tcp"), func() { req.RemoteIo = _RemoteIo; _RemoteIo.Io = _RemoteIo_Tcp })
-	_RemoteIo_Udp := &IO_Udp{}
-	cmd.PersistentFlags().StringVar(&_RemoteIo_Udp.Udp, cfg.FlagNamer("RemoteIo Udp"), "", "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("RemoteIo Udp"), func() { req.RemoteIo = _RemoteIo; _RemoteIo.Io = _RemoteIo_Udp })
-	_RemoteIo_Unix := &IO_Unix{}
-	cmd.PersistentFlags().StringVar(&_RemoteIo_Unix.Unix, cfg.FlagNamer("RemoteIo Unix"), "", "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("RemoteIo Unix"), func() { req.RemoteIo = _RemoteIo; _RemoteIo.Io = _RemoteIo_Unix })
-	_LocalIo := &IO{}
-	flag.EnumVar(cmd.PersistentFlags(), &_LocalIo.IoType, cfg.FlagNamer("LocalIo IoType"), "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("LocalIo IoType"), func() { req.LocalIo = _LocalIo })
-	_LocalIo_Tcp := &IO_Tcp{}
-	cmd.PersistentFlags().StringVar(&_LocalIo_Tcp.Tcp, cfg.FlagNamer("LocalIo Tcp"), "", "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("LocalIo Tcp"), func() { req.LocalIo = _LocalIo; _LocalIo.Io = _LocalIo_Tcp })
-	_LocalIo_Udp := &IO_Udp{}
-	cmd.PersistentFlags().StringVar(&_LocalIo_Udp.Udp, cfg.FlagNamer("LocalIo Udp"), "", "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("LocalIo Udp"), func() { req.LocalIo = _LocalIo; _LocalIo.Io = _LocalIo_Udp })
-	_LocalIo_Unix := &IO_Unix{}
-	cmd.PersistentFlags().StringVar(&_LocalIo_Unix.Unix, cfg.FlagNamer("LocalIo Unix"), "", "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("LocalIo Unix"), func() { req.LocalIo = _LocalIo; _LocalIo.Io = _LocalIo_Unix })
+	_Remote := &IO{}
+	_Remote_Tcp := &IO_Tcp{}
+	cmd.PersistentFlags().StringVar(&_Remote_Tcp.Tcp, cfg.FlagNamer("Remote Tcp"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Remote Tcp"), func() { req.Remote = _Remote; _Remote.Io = _Remote_Tcp })
+	_Remote_Udp := &IO_Udp{}
+	cmd.PersistentFlags().StringVar(&_Remote_Udp.Udp, cfg.FlagNamer("Remote Udp"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Remote Udp"), func() { req.Remote = _Remote; _Remote.Io = _Remote_Udp })
+	_Remote_Unix := &IO_Unix{}
+	cmd.PersistentFlags().StringVar(&_Remote_Unix.Unix, cfg.FlagNamer("Remote Unix"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Remote Unix"), func() { req.Remote = _Remote; _Remote.Io = _Remote_Unix })
+	_Local := &IO{}
+	_Local_Tcp := &IO_Tcp{}
+	cmd.PersistentFlags().StringVar(&_Local_Tcp.Tcp, cfg.FlagNamer("Local Tcp"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Local Tcp"), func() { req.Local = _Local; _Local.Io = _Local_Tcp })
+	_Local_Udp := &IO_Udp{}
+	cmd.PersistentFlags().StringVar(&_Local_Udp.Udp, cfg.FlagNamer("Local Udp"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Local Udp"), func() { req.Local = _Local; _Local.Io = _Local_Udp })
+	_Local_Unix := &IO_Unix{}
+	cmd.PersistentFlags().StringVar(&_Local_Unix.Unix, cfg.FlagNamer("Local Unix"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Local Unix"), func() { req.Local = _Local; _Local.Io = _Local_Unix })
 
 	return cmd
 }
@@ -325,8 +314,6 @@ func _P2PPipeStopForwardingIOCommand(cfg *client.Config) *cobra.Command {
 	}
 
 	_LocalIo := &IO{}
-	flag.EnumVar(cmd.PersistentFlags(), &_LocalIo.IoType, cfg.FlagNamer("LocalIo IoType"), "")
-	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("LocalIo IoType"), func() { req.LocalIo = _LocalIo })
 	_LocalIo_Tcp := &IO_Tcp{}
 	cmd.PersistentFlags().StringVar(&_LocalIo_Tcp.Tcp, cfg.FlagNamer("LocalIo Tcp"), "", "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("LocalIo Tcp"), func() { req.LocalIo = _LocalIo; _LocalIo.Io = _LocalIo_Tcp })

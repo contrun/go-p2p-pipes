@@ -23,12 +23,9 @@ const UNIMPLEMENTED_ERROR_MESSAGE string = "unimplemented"
 var UNIMPLEMENTED_ERROR error = status.Error(codes.Unimplemented, UNIMPLEMENTED_ERROR_MESSAGE)
 
 func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscoveringPeersRequest) (*pb.StartDiscoveringPeersResponse, error) {
-	var response pb.StartDiscoveringPeersResponse
-	if in.Method == pb.PeerDiscoveryMethod_DHT {
-		dht := in.GetDht()
-		if dht == nil {
-			return nil, status.Error(codes.InvalidArgument, "Argument dht not passed")
-		}
+	if dht := in.GetDht(); dht != nil {
+		var response pb.StartDiscoveringPeersResponse
+
 		rv := dht.GetRv()
 		if rv == "" {
 			return nil, status.Error(codes.InvalidArgument, "Argument rv dht not passed")
@@ -46,12 +43,9 @@ func (s *Server) StartDiscoveringPeers(ctx context.Context, in *pb.StartDiscover
 }
 
 func (s *Server) StopDiscoveringPeers(ctx context.Context, in *pb.StopDiscoveringPeersRequest) (*pb.StopDiscoveringPeersResponse, error) {
-	var response pb.StopDiscoveringPeersResponse
-	if in.Method == pb.PeerDiscoveryMethod_DHT {
-		dht := in.GetDht()
-		if dht == nil {
-			return nil, status.Error(codes.InvalidArgument, "Argument dht not passed")
-		}
+	if dht := in.GetDht(); dht != nil {
+		var response pb.StopDiscoveringPeersResponse
+
 		rv := dht.GetRv()
 		if rv == "" {
 			return nil, status.Error(codes.InvalidArgument, "Argument rv dht not passed")
@@ -91,12 +85,8 @@ func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.Li
 }
 
 func (s *Server) ListDiscoveredPeers(ctx context.Context, in *pb.ListDiscoveredPeersRequest) (*pb.ListDiscoveredPeersResponse, error) {
-	var response pb.ListDiscoveredPeersResponse
-	if in.Method == pb.PeerDiscoveryMethod_DHT {
-		dht := in.GetDht()
-		if dht == nil {
-			return nil, status.Error(codes.InvalidArgument, "Argument dht not passed")
-		}
+	if dht := in.GetDht(); dht != nil {
+		var response pb.ListDiscoveredPeersResponse
 
 		rv := dht.GetRv()
 		if rv == "" {
@@ -161,64 +151,31 @@ func addrInfosToPBPeers(network network.Network, peers []peer.AddrInfo) []*pb.Pe
 	return ps
 }
 
-func validateIO(io *pb.IO) error {
-	if io == nil {
-		return fmt.Errorf("IO should not be nil")
-	}
-	switch io.IoType {
-	case pb.IOType_IOTYPEUNDEFINED:
-		return fmt.Errorf("IO type is undefined")
-	case pb.IOType_TCP:
-		if io.GetTcp() == "" {
-			return fmt.Errorf("Address not provided in Tcp")
-		} else {
-			return nil
-		}
-	case pb.IOType_UDP:
-		if io.GetUdp() == "" {
-			return fmt.Errorf("Address not provided in Udp")
-		} else {
-			return nil
-		}
-	case pb.IOType_UNIX:
-		if io.GetUnix() == "" {
-			return fmt.Errorf("Address not provided in Unix")
-		} else {
-			return nil
-		}
-	default:
-		return nil
-	}
-}
-
 func ioToMultiaddr(io *pb.IO) (multiaddr.Multiaddr, error) {
 	var ma multiaddr.Multiaddr
-	if err := validateIO(io); err != nil {
-		return ma, err
-	}
 
-	switch io.IoType {
-	case pb.IOType_TCP:
-		addr, err := net.ResolveTCPAddr("tcp", io.GetTcp())
+	if tcp := io.GetTcp(); tcp != "" {
+		addr, err := net.ResolveTCPAddr("tcp", tcp)
 		if err != nil {
 			return ma, err
 		}
 		return manet.FromNetAddr(addr)
-	case pb.IOType_UDP:
-		addr, err := net.ResolveUDPAddr("udp", io.GetUdp())
-		if err != nil {
-			return ma, err
-		}
-		return manet.FromNetAddr(addr)
-	case pb.IOType_UNIX:
-		addr, err := net.ResolveUnixAddr("unix", io.GetUnix())
-		if err != nil {
-			return ma, err
-		}
-		return manet.FromNetAddr(addr)
-	default:
-		return ma, fmt.Errorf("Unsupported IO type %s", io.IoType)
 	}
+	if udp := io.GetUdp(); udp != "" {
+		addr, err := net.ResolveUDPAddr("udp", udp)
+		if err != nil {
+			return ma, err
+		}
+		return manet.FromNetAddr(addr)
+	}
+	if unix := io.GetUnix(); unix != "" {
+		addr, err := net.ResolveUnixAddr("unix", unix)
+		if err != nil {
+			return ma, err
+		}
+		return manet.FromNetAddr(addr)
+	}
+	return ma, fmt.Errorf("Unsupported IO type")
 }
 
 func (s *Server) StartForwardingIO(ctx context.Context, in *pb.StartForwardingIORequest) (*pb.StartForwardingIOResponse, error) {
@@ -241,16 +198,16 @@ func (s *Server) StartForwardingIO(ctx context.Context, in *pb.StartForwardingIO
 		}
 		s.Daemon.Peerstore().AddAddrs(peer, mas, time.Duration(time.Second*60))
 	}
-	if in.RemoteIo == nil || in.LocalIo == nil {
+	if in.Remote == nil || in.Local == nil {
 		return nil, status.Error(codes.InvalidArgument, "Addresses to forward traffic not given")
 	}
-	remoteAddr, err := ioToMultiaddr(in.RemoteIo)
+	remoteAddr, err := ioToMultiaddr(in.Remote)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid remote addr %s", in.RemoteIo))
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid remote addr %s", in.Remote))
 	}
-	localAddr, err := ioToMultiaddr(in.LocalIo)
+	localAddr, err := ioToMultiaddr(in.Local)
 	if err != nil {
-		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid local addr %s", in.LocalIo))
+		return nil, status.Error(codes.InvalidArgument, fmt.Sprintf("Invalid local addr %s", in.Local))
 	}
 	err = s.Daemon.ForwardTraffic(peer, remoteAddr, localAddr)
 	if err != nil {
