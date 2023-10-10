@@ -69,9 +69,12 @@ func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.Li
 		n := s.Daemon.Network()
 		ps := n.Peerstore()
 		peers := ps.Peers()
-		peerinfos := make([]peer.AddrInfo, len(peers))
+		peerinfos := make([]peer.AddrInfo, 0)
 		for _, p := range peers {
 			addrinfo := ps.PeerInfo(p)
+			if s.Daemon.Host.ID() == p {
+				continue
+			}
 			if in.GetPeerType() == pb.PeerType_CONNECTED && n.Connectedness(p) != network.Connected {
 				continue
 			}
@@ -144,7 +147,7 @@ func addrInfoToPBPeer(network network.Network, peer peer.AddrInfo) *pb.Peer {
 }
 
 func addrInfosToPBPeers(network network.Network, peers []peer.AddrInfo) []*pb.Peer {
-	var ps = make([]*pb.Peer, len(peers))
+	var ps = make([]*pb.Peer, 0)
 	for _, peer := range peers {
 		ps = append(ps, addrInfoToPBPeer(network, peer))
 	}

@@ -147,6 +147,7 @@ func newDaemonFromConfig(ctx context.Context, c Config, extra_opts ...libp2p.Opt
 	}
 
 	if len(c.HostAddresses) > 0 {
+		log.Infow("Listening at", "addresses", c.HostAddresses)
 		opts = append(opts, libp2p.ListenAddrs(c.HostAddresses...))
 	}
 

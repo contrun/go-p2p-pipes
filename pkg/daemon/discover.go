@@ -188,8 +188,11 @@ func (d *Daemon) FindPeersViaDHTSync(ctx context.Context, rv string) ([]peer.Add
 	if err != nil {
 		return nil, err
 	}
-	peers := make([]peer.AddrInfo, 20)
+	peers := make([]peer.AddrInfo, 0)
 	for peer := range peersCh {
+		if peer.ID == d.Host.ID() {
+			continue
+		}
 		peers = append(peers, peer)
 	}
 	return peers, nil
