@@ -2,11 +2,13 @@ package server
 
 import (
 	"context"
+	"encoding/base64"
 	"fmt"
 	"net"
 	"time"
 
 	"github.com/contrun/go-p2p-pipes/pb"
+	"github.com/libp2p/go-libp2p/core/network"
 	"github.com/libp2p/go-libp2p/core/peer"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
@@ -69,7 +71,7 @@ func (s *Server) StopDiscoveringPeers(ctx context.Context, in *pb.StopDiscoverin
 func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.ListPeersResponse, error) {
 	var response pb.ListPeersResponse
 	switch in.GetPeerType() {
-	case pb.PeerType_ALL:
+	case pb.PeerType_ALL, pb.PeerType_PEERTYPEUNDEFIEND:
 		ps := s.Daemon.Network().Peerstore()
 		peers := ps.Peers()
 		peerinfos := make([]peer.AddrInfo, len(peers))
@@ -77,7 +79,7 @@ func (s *Server) ListPeers(ctx context.Context, in *pb.ListPeersRequest) (*pb.Li
 			addrinfo := ps.PeerInfo(p)
 			peerinfos = append(peerinfos, addrinfo)
 		}
-		response.Peers = addrInfosToPBPeers(peerinfos)
+		response.Peers = addrInfosToPBPeers(s.Daemon.Network(), peerinfos)
 		return &response, nil
 	default:
 		return nil, UNIMPLEMENTED_ERROR
@@ -102,7 +104,7 @@ func (s *Server) ListDiscoveredPeers(ctx context.Context, in *pb.ListDiscoveredP
 			return nil, status.Error(codes.Internal, err.Error())
 		}
 		log.Debugw("Found peers via DHT", "#peers", len(peers), "peers", peers)
-		response.Peers = addrInfosToPBPeers(peers)
+		response.Peers = addrInfosToPBPeers(s.Daemon.Network(), peers)
 
 		return &response, nil
 	}
@@ -110,19 +112,47 @@ func (s *Server) ListDiscoveredPeers(ctx context.Context, in *pb.ListDiscoveredP
 	return nil, UNIMPLEMENTED_ERROR
 }
 
-func addrInfoToPBPeer(peer peer.AddrInfo) *pb.Peer {
+func addrInfoToPBPeer(network network.Network, peer peer.AddrInfo) *pb.Peer {
 	var p pb.Peer
 	p.Id = peer.ID.String()
 	for _, addr := range peer.Addrs {
 		p.Addresses = append(p.Addresses, addr.String())
+		if network != nil {
+			p.Connectedness = network.Connectedness(peer.ID).String()
+			conns := network.ConnsToPeer(peer.ID)
+			for _, conn := range conns {
+				var c pb.Connection
+				c.Id = conn.ID()
+				c.Direction = conn.Stat().Direction.String()
+				c.IsTransient = conn.Stat().Transient
+				c.OpenTime = conn.Stat().Opened.String()
+				c.LocalAddr = conn.LocalMultiaddr().String()
+				c.RemoteAddr = conn.RemoteMultiaddr().String()
+				pk, err := conn.RemotePublicKey().Raw()
+				if err != nil {
+					c.RemotePublicKey = base64.StdEncoding.EncodeToString(pk)
+				}
+				c.Multiplexer = string(conn.ConnState().StreamMultiplexer)
+				c.Security = string(conn.ConnState().Security)
+				c.Transport = conn.ConnState().Transport
+				for _, stream := range conn.GetStreams() {
+					var s pb.Stream
+					s.ConnectionId = stream.Conn().ID()
+					s.Id = stream.ID()
+					s.Protocol = string(stream.Protocol())
+					c.Streams = append(c.Streams, &s)
+				}
+				p.Connections = append(p.Connections, &c)
+			}
+		}
 	}
 	return &p
 }
 
-func addrInfosToPBPeers(peers []peer.AddrInfo) []*pb.Peer {
+func addrInfosToPBPeers(network network.Network, peers []peer.AddrInfo) []*pb.Peer {
 	var ps = make([]*pb.Peer, len(peers))
 	for _, peer := range peers {
-		ps = append(ps, addrInfoToPBPeer(peer))
+		ps = append(ps, addrInfoToPBPeer(network, peer))
 	}
 	return ps
 }

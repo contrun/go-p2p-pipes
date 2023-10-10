@@ -255,6 +255,10 @@ func _P2PPipeStartForwardingIOCommand(cfg *client.Config) *cobra.Command {
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Id"), func() { req.Peer = _Peer })
 	cmd.PersistentFlags().StringSliceVar(&_Peer.Addresses, cfg.FlagNamer("Peer Addresses"), nil, "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Addresses"), func() { req.Peer = _Peer })
+	cmd.PersistentFlags().StringVar(&_Peer.Connectedness, cfg.FlagNamer("Peer Connectedness"), "", "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Connectedness"), func() { req.Peer = _Peer })
+	flag.SliceVar(cmd.PersistentFlags(), flag.ParseMessageE[*Connection], &_Peer.Connections, cfg.FlagNamer("Peer Connections"), "")
+	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("Peer Connections"), func() { req.Peer = _Peer })
 	_RemoteIo := &IO{}
 	flag.EnumVar(cmd.PersistentFlags(), &_RemoteIo.IoType, cfg.FlagNamer("RemoteIo IoType"), "")
 	flag.WithPostSetHook(cmd.PersistentFlags(), cfg.FlagNamer("RemoteIo IoType"), func() { req.RemoteIo = _RemoteIo })

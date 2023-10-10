@@ -55,9 +55,31 @@ enum PeerType {
   DISCOVERED = 3;
 }
 
+message Stream {
+  string connection_id = 1;
+  string id = 2;
+  string protocol = 3;
+}
+
+message Connection {
+  string id = 1;
+  string direction = 2;
+  bool is_transient = 3;
+  string open_time = 4;
+  string local_addr = 5;
+  string remote_addr = 6;
+  string remote_public_key = 7;
+  string multiplexer = 8;
+  string security = 9;
+  string transport = 10;
+  repeated Stream streams = 11;
+}
+
 message Peer {
   string id = 1;
   repeated string addresses = 2;
+  string connectedness = 3;
+  repeated Connection connections = 4;
 }
 
 message ListPeersRequest { PeerType peer_type = 1; }
