@@ -25,10 +25,6 @@ var ForwardingControlProtocolID = protocol.ID("/gop2ppipes/forward/control/0.1.0
 var ForwardingDataProtocolID = protocol.ID("/gop2ppipes/forward/data/0.1.0")
 
 type SetupForwardingRequest struct {
-	// TODO: we should obtain the peer id from rpc the request connection
-	// not from rpc payload sent by the peer. We currently send the ID,
-	// because there seems to have no way to obtain peer information from gorpc.
-	ID      string
 	Address string
 }
 
@@ -54,7 +50,6 @@ type Forwarder struct {
 func (d *Daemon) CreateOrGetForwarder(peer peer.ID, remoteAddr multiaddr.Multiaddr, localAddr multiaddr.Multiaddr) (forwarder *Forwarder, err error) {
 	rpcClient := gorpc.NewClient(d.Host, ForwardingControlProtocolID)
 	request := SetupForwardingRequest{
-		ID:      d.ID().String(),
 		Address: remoteAddr.String(),
 	}
 	var response SetupForwardingResponse
@@ -130,12 +125,12 @@ func (d *Daemon) RunForwarder(forwarder *Forwarder) error {
 			return err
 		}
 
-		forwarder.waitGroup.Add(1)
 		go func() {
-			defer s.Close()
-			defer c.Close()
-			defer forwarder.waitGroup.Done()
+			forwarder.waitGroup.Add(1)
 			d.doStreamPipe(c, s)
+			s.Close()
+			c.Close()
+			forwarder.waitGroup.Done()
 		}()
 	}
 }
@@ -181,7 +176,7 @@ func readAuthorizationCookie(reader io.Reader) (string, error) {
 // to the receiver of this RPC which effectively connects to the given multiaddr.
 func (d *ForwardingService) SetupForwarding(ctx context.Context, request SetupForwardingRequest, response *SetupForwardingResponse) error {
 	log.Info("Received a Forwarding call")
-	peer, err := peer.Decode(request.ID)
+	peer, err := gorpc.GetRequestSender(ctx)
 	if err != nil {
 		return err
 	}
