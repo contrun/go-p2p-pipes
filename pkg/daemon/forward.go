@@ -83,6 +83,7 @@ func (d *Daemon) CreateOrGetForwarder(peer peer.ID, remoteAddr multiaddr.Multiad
 }
 
 func (d *Daemon) RunForwarder(forwarder *Forwarder) error {
+	doneChan := make(chan struct{}, 1)
 	go func() {
 		defer common.CloseMaNetListener(forwarder.listener)
 		for {
@@ -90,7 +91,7 @@ func (d *Daemon) RunForwarder(forwarder *Forwarder) error {
 			case <-forwarder.stopChan:
 				return
 			case <-forwarder.timeoutChan:
-				// TODO: We should not accepting new connections any more.
+				doneChan <- struct{}{}
 				forwarder.waitGroup.Wait()
 				return
 			}
@@ -102,6 +103,17 @@ func (d *Daemon) RunForwarder(forwarder *Forwarder) error {
 		if err != nil {
 			log.Errorw("Error while accepting connection to local address", "addr", forwarder.listener.Multiaddr().String(), "error", err)
 			return err
+		}
+
+		// This forwarder has timed out. We may not be able to create a stream to forward traffic.
+		// Return immediately.
+		// Note that this code must be placed here, otherwise we may accept one undesided connection.
+		// The downside of placing the code here is that we need to accept and close that unintended connection.
+		select {
+		case <-doneChan:
+			c.Close()
+			return nil
+		default:
 		}
 
 		ctx := context.Background()
