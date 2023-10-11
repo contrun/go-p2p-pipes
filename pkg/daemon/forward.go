@@ -19,19 +19,23 @@ import (
 	manet "github.com/multiformats/go-multiaddr/net"
 )
 
+const TimeFormat = time.RFC3339
+
 var ForwardingControlProtocolID = protocol.ID("/gop2ppipes/forward/control/0.1.0")
 var ForwardingDataProtocolID = protocol.ID("/gop2ppipes/forward/data/0.1.0")
 
 type SetupForwardingRequest struct {
 	// TODO: we should obtain the peer id from rpc the request connection
-	// not from rpc payload set by the peer
+	// not from rpc payload sent by the peer. We currently send the ID,
+	// because there seems to have no way to obtain peer information from gorpc.
 	ID      string
 	Address string
 }
 
-// TODO: should also return a duration within which the AuthorizationCookie is valid.
 type SetupForwardingResponse struct {
 	AuthorizationCookie string
+	// TODO: This field is not acutally checked.
+	ValidUntil time.Time
 }
 
 type ForwardingService struct {
@@ -65,8 +69,16 @@ func (d *Daemon) CreateOrGetForwarder(peer peer.ID, remoteAddr multiaddr.Multiad
 		return
 	}
 	stopChan := make(chan struct{})
-	timeoutChan := time.After(1 * time.Hour)
-
+	validUntil := response.ValidUntil
+	if err != nil {
+		return
+	}
+	duration := time.Until(validUntil)
+	if duration.Microseconds() < 0 {
+		err = errors.New("Invalid validUntil (have passed): " + response.ValidUntil.Format(time.RFC3339))
+		return
+	}
+	timeoutChan := time.After(duration)
 	return &Forwarder{listener: listener, peer: peer, timeoutChan: timeoutChan, stopChan: stopChan, authorizationCookie: response.AuthorizationCookie}, nil
 }
 
@@ -108,9 +120,9 @@ func (d *Daemon) RunForwarder(forwarder *Forwarder) error {
 
 		forwarder.waitGroup.Add(1)
 		go func() {
-			defer forwarder.waitGroup.Done()
 			defer s.Close()
 			defer c.Close()
+			defer forwarder.waitGroup.Done()
 			d.doStreamPipe(c, s)
 		}()
 	}
@@ -166,11 +178,12 @@ func (d *ForwardingService) SetupForwarding(ctx context.Context, request SetupFo
 		return err
 	}
 
-	cookie, err := d.daemon.GetAuthorizationCookie(peer, addr)
+	cookie, err := d.daemon.CreateAuthorizationCookie(peer, addr)
 	if err != nil {
 		return err
 	}
 	response.AuthorizationCookie = cookie
+	response.ValidUntil = time.Now().Add(1 * time.Hour)
 	return nil
 }
 
@@ -212,7 +225,7 @@ func (d *Daemon) RegisterForwardingService() error {
 }
 
 // TODO: save a "real" cookie here and look up it later.
-func (d *Daemon) GetAuthorizationCookie(peer peer.ID, addr multiaddr.Multiaddr) (string, error) {
+func (d *Daemon) CreateAuthorizationCookie(peer peer.ID, addr multiaddr.Multiaddr) (string, error) {
 	return peer.String() + "/" + addr.String(), nil
 }
 

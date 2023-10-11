@@ -4,9 +4,12 @@ import (
 	"os"
 
 	multierror "github.com/hashicorp/go-multierror"
+	logging "github.com/ipfs/go-log"
 	"github.com/multiformats/go-multiaddr"
 	manet "github.com/multiformats/go-multiaddr/net"
 )
+
+var log = logging.Logger("server")
 
 func maybeRemoveUnixListenerPath(ma multiaddr.Multiaddr) error {
 	c, _ := multiaddr.SplitFirst(ma)
@@ -20,6 +23,7 @@ func maybeRemoveUnixListenerPath(ma multiaddr.Multiaddr) error {
 // to a unix domain socket. In that case, the file associated to
 // the socket is also removed.
 func CloseMaNetListener(l manet.Listener) error {
+	log.Debugw("Closing listener", "local address", l.Multiaddr().String())
 	var merr *multierror.Error
 	var ma = l.Multiaddr()
 
