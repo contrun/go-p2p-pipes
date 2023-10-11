@@ -8,6 +8,7 @@ import (
 	"net"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/contrun/go-p2p-pipes/pkg/common"
 	gorpc "github.com/libp2p/go-libp2p-gorpc"
@@ -28,12 +29,95 @@ type SetupForwardingRequest struct {
 	Address string
 }
 
+// TODO: should also return a duration within which the AuthorizationCookie is valid.
 type SetupForwardingResponse struct {
 	AuthorizationCookie string
 }
 
 type ForwardingService struct {
 	daemon *Daemon
+}
+
+type Forwarder struct {
+	listener            manet.Listener
+	peer                peer.ID
+	stopChan            chan struct{}
+	timeoutChan         <-chan time.Time
+	authorizationCookie string
+	waitGroup           sync.WaitGroup
+}
+
+func (d *Daemon) CreateOrGetForwarder(peer peer.ID, remoteAddr multiaddr.Multiaddr, localAddr multiaddr.Multiaddr) (forwarder *Forwarder, err error) {
+	rpcClient := gorpc.NewClient(d.Host, ForwardingControlProtocolID)
+	request := SetupForwardingRequest{
+		ID:      d.ID().String(),
+		Address: remoteAddr.String(),
+	}
+	var response SetupForwardingResponse
+	err = rpcClient.Call(peer, "ForwardingService", "SetupForwarding", request, &response)
+	if err != nil {
+		log.Errorw("Error while calling rpc", "peer", peer, "error", err)
+		return
+	}
+	listener, err := manet.Listen(localAddr)
+	if err != nil {
+		log.Errorw("Error while listening to local address", "addr", localAddr.String(), "error", err)
+		return
+	}
+	stopChan := make(chan struct{})
+	timeoutChan := time.After(1 * time.Hour)
+
+	return &Forwarder{listener: listener, peer: peer, timeoutChan: timeoutChan, stopChan: stopChan, authorizationCookie: response.AuthorizationCookie}, nil
+}
+
+func (d *Daemon) RunForwarder(forwarder *Forwarder) error {
+	go func() {
+		defer common.CloseMaNetListener(forwarder.listener)
+		for {
+			select {
+			case <-forwarder.stopChan:
+				return
+			case <-forwarder.timeoutChan:
+				// TODO: We should not accepting new connections any more.
+				forwarder.waitGroup.Wait()
+				return
+			}
+		}
+	}()
+
+	for {
+		c, err := forwarder.listener.Accept()
+		if err != nil {
+			log.Errorw("Error while accepting connection to local address", "addr", forwarder.listener.Multiaddr().String(), "error", err)
+			return err
+		}
+
+		ctx := context.Background()
+		s, err := d.NewStream(ctx, forwarder.peer, ForwardingDataProtocolID)
+		if err != nil {
+			log.Errorw("Error while starting new stream to peer", "peer", forwarder.peer, "error", err)
+			// TODO: Is this a temporary error? Should we continue after this?
+			return err
+		}
+		err = writeAuthorizationCookie(s, forwarder.authorizationCookie)
+		if err != nil {
+			log.Errorw("Error while authorization cookie", "error", err)
+			s.Reset()
+			return err
+		}
+
+		forwarder.waitGroup.Add(1)
+		go func() {
+			defer forwarder.waitGroup.Done()
+			defer s.Close()
+			defer c.Close()
+			d.doStreamPipe(c, s)
+		}()
+	}
+}
+
+func (f *Forwarder) Stop() {
+	f.stopChan <- struct{}{}
 }
 
 func writeAuthorizationCookie(writer io.Writer, cookie string) error {
@@ -169,48 +253,10 @@ func (d *Daemon) doStreamPipe(c net.Conn, s network.Stream) {
 // Remote peer would then forward the traffic to the remote address.
 // The listener will be closed after this forwarding has finished.
 func (d *Daemon) ForwardTraffic(peer peer.ID, remoteAddr multiaddr.Multiaddr, localAddr multiaddr.Multiaddr) error {
-	// TODO: maybe with proactively clean up resources? or back pressue
-	rpcClient := gorpc.NewClient(d.Host, ForwardingControlProtocolID)
-	request := SetupForwardingRequest{
-		ID:      d.ID().String(),
-		Address: remoteAddr.String(),
-	}
-	var response SetupForwardingResponse
-	err := rpcClient.Call(peer, "ForwardingService", "SetupForwarding", request, &response)
+	forwarder, err := d.CreateOrGetForwarder(peer, remoteAddr, localAddr)
 	if err != nil {
-		log.Errorw("Error while calling rpc", "peer", peer, "error", err)
 		return err
 	}
-	ctx := context.Background()
-	s, err := d.NewStream(ctx, peer, ForwardingDataProtocolID)
-	if err != nil {
-		log.Errorw("Error while starting new stream to peer", "peer", peer, "error", err)
-		return err
-	}
-	err = writeAuthorizationCookie(s, response.AuthorizationCookie)
-	if err != nil {
-		log.Errorw("Error while authorization cookie", "error", err)
-		s.Reset()
-		return err
-	}
-	listener, err := manet.Listen(localAddr)
-	if err != nil {
-		log.Errorw("Error while listening to local address", "addr", localAddr.String(), "error", err)
-		s.Reset()
-		return err
-	}
-	// Don't block waiting for local listener to accept connections.
-	go func() {
-		defer common.CloseMaNetListener(listener)
-		c, err := listener.Accept()
-		if err != nil {
-			log.Debugw("Error while accepting connection to local address", "addr", localAddr.String(), "error", err)
-			s.Reset()
-			return
-		}
-		defer s.Close()
-		defer c.Close()
-		d.doStreamPipe(c, s)
-	}()
+	go d.RunForwarder(forwarder)
 	return nil
 }

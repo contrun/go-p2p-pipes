@@ -154,7 +154,6 @@ func (d *Daemon) Close() error {
 func NewDaemon(ctx context.Context, daemonConfig DaemonConfig, opts ...libp2p.Option) (*Daemon, error) {
 	d := &Daemon{
 		ctx:           ctx,
-		handlers:      make(map[protocol.ID]ma.Multiaddr),
 		dhtRendezvous: make(map[string]bool),
 	}
 
